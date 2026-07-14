@@ -36,7 +36,12 @@ public enum WebDAVPrecondition: Equatable, Sendable {
     case etag(String)
 }
 
-public final class WebDAVTransport: @unchecked Sendable {
+public protocol WebDAVTransporting: Sendable {
+    func fetch() async throws -> RemoteSnapshot?
+    func put(_ snapshot: SyncSnapshot, precondition: WebDAVPrecondition) async throws -> String?
+}
+
+public final class WebDAVTransport: WebDAVTransporting, @unchecked Sendable {
     private let fileURL: URL
     private let authorizationHeader: String
     private let session: URLSession

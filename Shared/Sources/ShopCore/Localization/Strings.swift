@@ -151,6 +151,21 @@ public enum ShopStrings {
     public static var webdavNotConfigured: String {
         NSLocalizedString("webdav.not_configured", comment: "Not configured")
     }
+    public static var webdavUnauthorized: String {
+        NSLocalizedString("webdav.error.unauthorized", bundle: .module, comment: "WebDAV authentication failed")
+    }
+    public static var webdavPreconditionFailed: String {
+        NSLocalizedString("webdav.error.precondition_failed", bundle: .module, comment: "Remote WebDAV data changed")
+    }
+    public static var webdavNetworkFailed: String {
+        NSLocalizedString("webdav.error.network", bundle: .module, comment: "WebDAV network error")
+    }
+    public static var webdavInvalidServer: String {
+        NSLocalizedString("webdav.error.invalid_server", bundle: .module, comment: "Invalid WebDAV server")
+    }
+    public static var webdavSyncFailed: String {
+        NSLocalizedString("webdav.error.sync_failed", bundle: .module, comment: "WebDAV sync failed")
+    }
 
     // MARK: - Shopping Store Errors
     public static func shoppingStoreContainerCreationFailed(

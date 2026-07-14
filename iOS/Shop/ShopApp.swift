@@ -19,6 +19,7 @@ struct ShopApp: App {
                 .tint(.accentColor)
                 .onAppear {
                     wifiSync.configure(with: dataStore)
+                    webdavSync.configure(with: dataStore)
                     webdavSync.migrateLegacyPasswordIfNeeded(
                         serverURL: webdavServer,
                         username: webdavUsername

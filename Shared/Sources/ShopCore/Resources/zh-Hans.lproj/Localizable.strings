@@ -4,3 +4,10 @@
 "error.store.save_failed" = "保存购物数据失败：%@";
 "error.store.item_not_found" = "未找到购物物品 %@。";
 "error.store.tag_not_found" = "未找到标签 %@。";
+
+/* WebDAV sync errors */
+"webdav.error.unauthorized" = "WebDAV 身份验证失败，请检查用户名和密码。";
+"webdav.error.precondition_failed" = "远程购物清单已更改，请重新同步。";
+"webdav.error.network" = "无法连接 WebDAV 服务器。";
+"webdav.error.invalid_server" = "请输入有效的 HTTPS WebDAV 服务器地址。";
+"webdav.error.sync_failed" = "无法与 WebDAV 服务器同步。";

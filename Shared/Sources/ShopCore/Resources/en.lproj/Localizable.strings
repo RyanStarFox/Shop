@@ -4,3 +4,10 @@
 "error.store.save_failed" = "Unable to save shopping data: %@";
 "error.store.item_not_found" = "Shopping item %@ was not found.";
 "error.store.tag_not_found" = "Tag %@ was not found.";
+
+/* WebDAV sync errors */
+"webdav.error.unauthorized" = "WebDAV authentication failed. Check your username and password.";
+"webdav.error.precondition_failed" = "The remote shopping list changed. Please sync again.";
+"webdav.error.network" = "Unable to reach the WebDAV server.";
+"webdav.error.invalid_server" = "Enter a valid HTTPS WebDAV server address.";
+"webdav.error.sync_failed" = "Unable to sync with the WebDAV server.";

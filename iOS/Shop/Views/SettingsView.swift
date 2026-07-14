@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage("appearance_mode") private var appearanceMode = "system"
     @State private var webdavPassword = ""
     @State private var showTagManagement = false
+    @State private var webdavSyncTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -114,18 +115,34 @@ struct SettingsView: View {
                                     systemImage: "arrow.triangle.2.circlepath",
                                     isFullWidth: true
                                 ) {
-                                    do {
-                                        try webdavSync.saveCredentials(
-                                            serverURL: webdavServer,
-                                            username: webdavUsername,
-                                            password: webdavPassword
-                                        )
-                                        webdavPassword = ""
-                                    } catch {
-                                        // The service exposes the localized error without revealing credentials.
+                                    webdavSyncTask = Task {
+                                        do {
+                                            try webdavSync.saveCredentials(
+                                                serverURL: webdavServer,
+                                                username: webdavUsername,
+                                                password: webdavPassword
+                                            )
+                                            webdavPassword = ""
+                                            await webdavSync.syncNow()
+                                        } catch {
+                                            // The service exposes the localized error without revealing credentials.
+                                        }
                                     }
                                 }
-                                .disabled(webdavServer.isEmpty || webdavUsername.isEmpty)
+                                .disabled(
+                                    webdavServer.isEmpty
+                                        || webdavUsername.isEmpty
+                                        || webdavSync.isSyncing
+                                )
+
+                                if webdavSync.isSyncing {
+                                    ProgressView(ShopStrings.syncing)
+                                        .font(.caption)
+                                } else if let lastSync = webdavSync.lastSyncDate {
+                                    Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
 
                                 if let error = webdavSync.error {
                                     Text(error)
@@ -190,6 +207,7 @@ struct SettingsView: View {
                     .presentationCornerRadius(32)
             }
             .onDisappear {
+                webdavSyncTask?.cancel()
                 webdavPassword = ""
             }
             .onAppear {

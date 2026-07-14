@@ -16,6 +16,7 @@ struct ShopMacApp: App {
                 .environmentObject(webdavSync)
                 .frame(minWidth: 400, idealWidth: 480, minHeight: 500, idealHeight: 700)
                 .onAppear {
+                    webdavSync.configure(with: dataStore)
                     webdavSync.migrateLegacyPasswordIfNeeded(
                         serverURL: webdavServer,
                         username: webdavUsername

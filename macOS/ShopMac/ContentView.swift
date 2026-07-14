@@ -145,6 +145,11 @@ struct MacContentView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                if webdavSync.isSyncing {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .frame(width: 16, height: 16)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -187,6 +192,17 @@ struct MacContentView: View {
             .foregroundStyle(.secondary)
 
             Spacer()
+
+            if webdavSync.isConfigured {
+                Button {
+                    Task { await webdavSync.syncNow() }
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .disabled(webdavSync.isSyncing)
+            }
         }
     }
 

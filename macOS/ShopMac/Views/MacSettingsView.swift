@@ -8,6 +8,7 @@ struct MacSettingsView: View {
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
     @State private var webdavPassword = ""
+    @State private var webdavSyncTask: Task<Void, Never>?
 
     var body: some View {
         TabView {
@@ -16,17 +17,22 @@ struct MacSettingsView: View {
                 username: $webdavUsername,
                 password: $webdavPassword,
                 isConfigured: webdavSync.isConfigured,
+                isSyncing: webdavSync.isSyncing,
+                lastSync: webdavSync.lastSyncDate,
                 error: webdavSync.error,
-                onSave: {
-                    do {
-                        try webdavSync.saveCredentials(
-                            serverURL: webdavServer,
-                            username: webdavUsername,
-                            password: webdavPassword
-                        )
-                        webdavPassword = ""
-                    } catch {
-                        // The service exposes the localized error without revealing credentials.
+                onSync: {
+                    webdavSyncTask = Task {
+                        do {
+                            try webdavSync.saveCredentials(
+                                serverURL: webdavServer,
+                                username: webdavUsername,
+                                password: webdavPassword
+                            )
+                            webdavPassword = ""
+                            await webdavSync.syncNow()
+                        } catch {
+                            // The service exposes the localized error without revealing credentials.
+                        }
                     }
                 }
             )
@@ -51,6 +57,10 @@ struct MacSettingsView: View {
                 username: webdavUsername
             )
         }
+        .onDisappear {
+            webdavSyncTask?.cancel()
+            webdavPassword = ""
+        }
     }
 }
 
@@ -61,8 +71,10 @@ struct WebDAVSettingsTab: View {
     @Binding var username: String
     @Binding var password: String
     let isConfigured: Bool
+    let isSyncing: Bool
+    let lastSync: Date?
     let error: String?
-    let onSave: () -> Void
+    let onSync: () -> Void
 
     var body: some View {
         Form {
@@ -80,13 +92,22 @@ struct WebDAVSettingsTab: View {
             Section {
                 HStack {
                     Button(ShopStrings.syncNow) {
-                        onSave()
+                        onSync()
                     }
-                    .disabled(server.isEmpty || username.isEmpty)
+                    .disabled(server.isEmpty || username.isEmpty || isSyncing)
+
+                    if isSyncing {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
 
                     Spacer()
 
-                    if isConfigured {
+                    if let lastSync {
+                        Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if isConfigured {
                         Text(ShopStrings.webdavConfigured)
                             .font(.caption)
                             .foregroundStyle(.secondary)
