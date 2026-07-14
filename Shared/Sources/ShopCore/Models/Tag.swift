@@ -21,6 +21,6 @@ public final class Tag: Identifiable, Hashable {
     }
 
     public var color: PlatformColor {
-        PlatformColor(hex: colorHex) ?? .systemBlue
+        PlatformColor(hex: colorHex) ?? .blue
     }
 }

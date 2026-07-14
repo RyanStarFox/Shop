@@ -168,7 +168,7 @@ struct TagSettingsTab: View {
                     ForEach(dataStore.tags) { tag in
                         HStack {
                             Circle()
-                                .fill(tag.color)
+                                .fill(tag.displayColor)
                                 .frame(width: 12, height: 12)
                             Text(tag.name)
                             Spacer()

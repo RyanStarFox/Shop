@@ -19,7 +19,7 @@ struct AddItemView: View {
                     VStack(spacing: 6) {
                         Image(systemName: "cart.fill")
                             .font(.system(size: 40))
-                            .foregroundStyle(.accent.gradient)
+                            .foregroundStyle(Color.accentColor.gradient)
 
                         Text(ShopStrings.addItem)
                             .font(.title2.weight(.bold))

@@ -1,7 +1,8 @@
 import Foundation
-import WatchConnectivity
 
 #if os(iOS) || os(watchOS)
+import WatchConnectivity
+
 @MainActor
 public final class WiFiSyncService: NSObject, ObservableObject {
     @Published public var isReachable = false
@@ -58,7 +59,7 @@ public final class WiFiSyncService: NSObject, ObservableObject {
     }
 }
 
-extension WiFiSyncService: WCSessionDelegate {
+extension WiFiSyncService: @preconcurrency WCSessionDelegate {
     public func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
         if let error = error {
             print("WCSession activation failed: \(error)")

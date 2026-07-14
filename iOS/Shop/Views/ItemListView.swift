@@ -88,11 +88,11 @@ struct ItemRow: View {
                         ForEach(item.tags, id: \.id) { tag in
                             HStack(spacing: 3) {
                                 Circle()
-                                    .fill(tag.color)
+                                    .fill(tag.displayColor)
                                     .frame(width: 6, height: 6)
                                 Text(tag.name)
                                     .font(.caption2)
-                                    .foregroundStyle(tag.color)
+                                    .foregroundStyle(tag.displayColor)
                             }
                         }
                     }

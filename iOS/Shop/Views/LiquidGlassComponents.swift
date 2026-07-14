@@ -1,4 +1,5 @@
 import SwiftUI
+import ShopCore
 
 // MARK: - Liquid Glass Background
 struct LiquidGlassBackground: View {
@@ -10,8 +11,8 @@ struct LiquidGlassBackground: View {
                 // Base gradient
                 LinearGradient(
                     colors: colorScheme == .dark
-                        ? [Color(hex: "1C1C1E"), Color(hex: "2C2C2E"), Color(hex: "1C1C1E")]
-                        : [Color(hex: "F2F2F7"), Color(hex: "E5E5EA"), Color(hex: "F2F2F7")],
+                        ? [Color(shopHex: "1C1C1E") ?? .black, Color(shopHex: "2C2C2E") ?? .black, Color(shopHex: "1C1C1E") ?? .black]
+                        : [Color(shopHex: "F2F2F7") ?? .black, Color(shopHex: "E5E5EA") ?? .black, Color(shopHex: "F2F2F7") ?? .black],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -182,18 +183,18 @@ struct TagChip: View {
                 .background {
                     Capsule(style: .continuous)
                         .fill(isSelected
-                            ? tag.color.opacity(0.3)
-                            : .ultraThinMaterial
+                            ? AnyShapeStyle(tag.displayColor.opacity(0.3))
+                            : AnyShapeStyle(.ultraThinMaterial)
                         )
                         .overlay {
                             Capsule(style: .continuous)
                                 .stroke(
-                                    isSelected ? tag.color : .white.opacity(0.15),
+                                    isSelected ? tag.displayColor : .white.opacity(0.15),
                                     lineWidth: 1
                                 )
                         }
                 }
-                .foregroundStyle(isSelected ? tag.color : .primary)
+                .foregroundStyle(isSelected ? tag.displayColor : .primary)
         }
         .buttonStyle(.plain)
     }
@@ -225,23 +226,5 @@ struct SearchBar: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
         }
-    }
-}
-
-// MARK: - Color Extension
-extension Color {
-    init(hex: String) {
-        let r, g, b: Double
-        let start = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-        let scanner = Scanner(string: start)
-        var hexNumber: UInt64 = 0
-        guard scanner.scanHexInt64(&hexNumber) else {
-            self.init(.sRGB, red: 0, green: 0, blue: 0, opacity: 1)
-            return
-        }
-        r = Double((hexNumber & 0xff0000) >> 16) / 255
-        g = Double((hexNumber & 0x00ff00) >> 8) / 255
-        b = Double(hexNumber & 0x0000ff) / 255
-        self.init(.sRGB, red: r, green: g, blue: b, opacity: 1)
     }
 }

@@ -46,7 +46,7 @@ struct MacContentView: View {
                         ForEach(dataStore.tags) { tag in
                             HStack {
                                 Circle()
-                                    .fill(tag.color)
+                                    .fill(tag.displayColor)
                                     .frame(width: 10, height: 10)
                                 Text(tag.name)
                             }
@@ -88,7 +88,7 @@ struct MacContentView: View {
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)
             .disabled(newItemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -268,7 +268,7 @@ struct MacItemRow: View {
                     ForEach(item.tags, id: \.id) { tag in
                         HStack(spacing: 2) {
                             Circle()
-                                .fill(tag.color)
+                                .fill(tag.displayColor)
                                 .frame(width: 6, height: 6)
                             Text(tag.name)
                                 .font(.caption2)

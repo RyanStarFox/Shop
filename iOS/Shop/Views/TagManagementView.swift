@@ -177,9 +177,9 @@ struct TagEditRow: View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(tag.color.gradient)
+                    .fill(tag.displayColor.gradient)
                     .frame(width: 28, height: 28)
-                    .shadow(color: tag.color.opacity(0.4), radius: 4)
+                    .shadow(color: tag.displayColor.opacity(0.4), radius: 4)
 
                 if isEditing {
                     TextField("Name", text: $editName)

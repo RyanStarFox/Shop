@@ -1,18 +1,10 @@
 import XCTest
+import SwiftUI
 @testable import ShopCore
 
+@MainActor
 final class DataStoreTests: XCTestCase {
-    var dataStore: DataStore!
-
-    override func setUp() {
-        super.setUp()
-        dataStore = DataStore(inMemory: true)
-    }
-
-    override func tearDown() {
-        dataStore = nil
-        super.tearDown()
-    }
+    lazy var dataStore = DataStore(inMemory: true)
 
     // MARK: - Item tests
 
@@ -78,6 +70,17 @@ final class DataStoreTests: XCTestCase {
         dataStore.selectedTags = [tag.id]
         XCTAssertEqual(dataStore.filteredItems.count, 1)
         XCTAssertEqual(dataStore.filteredItems.first?.name, "Important task")
+    }
+
+    func testShopHexColorValidation() {
+        XCTAssertNotNil(Color(shopHex: "#34C759"))
+        XCTAssertNil(Color(shopHex: "invalid"))
+    }
+
+    func testTagProvidesDisplayColor() {
+        let tag = Tag(name: "Groceries", colorHex: "#34C759")
+
+        _ = tag.displayColor
     }
 
     // MARK: - Export/Import tests

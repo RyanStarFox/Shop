@@ -61,7 +61,7 @@ struct ActiveFilterBar: View {
                 }
 
                 ForEach(allTags.filter { selectedTags.contains($0.id) }) { tag in
-                    FilterChip(label: tag.name, color: tag.color) {
+                    FilterChip(label: tag.name, color: tag.displayColor) {
                         selectedTags.remove(tag.id)
                     }
                 }
