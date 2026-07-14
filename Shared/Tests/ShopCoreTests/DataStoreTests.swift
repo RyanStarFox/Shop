@@ -121,4 +121,158 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(newStore.items.first?.name, "Export test")
         XCTAssertEqual(newStore.tags.count, 1)
     }
+
+    func testExportDataEncodesCurrentSyncSnapshot() throws {
+        dataStore.addItem(name: "Milk")
+
+        let data = try XCTUnwrap(dataStore.exportData())
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let snapshot = try decoder.decode(SyncSnapshot.self, from: data)
+
+        XCTAssertEqual(snapshot.version, SyncSnapshot.currentVersion)
+        XCTAssertEqual(snapshot.items.first?.name, "Milk")
+    }
+
+    func testImportDataDoesNotReviveNewerLocalTombstone() throws {
+        let store = DataStore(inMemory: true, deviceID: "local")
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let createdAt = Date(timeIntervalSince1970: 1_000)
+        let deletedAt = Date(timeIntervalSince1970: 3_000)
+        try store.shoppingStore.apply(snapshot: snapshot(
+            itemID: itemID,
+            name: "Milk",
+            updatedAt: createdAt,
+            deviceID: "remote"
+        ))
+        try store.shoppingStore.softDeleteItem(itemID: itemID, now: deletedAt)
+
+        store.importData(try encoded(snapshot(
+            itemID: itemID,
+            name: "Milk",
+            updatedAt: Date(timeIntervalSince1970: 2_000),
+            deviceID: "remote"
+        )))
+
+        XCTAssertEqual(store.shoppingStore.item(id: itemID)?.deletedAt, deletedAt)
+        XCTAssertNil(store.lastError)
+    }
+
+    func testImportDataDoesNotOverwriteNewerLocalEdit() throws {
+        let store = DataStore(inMemory: true, deviceID: "local")
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        try store.shoppingStore.apply(snapshot: snapshot(
+            itemID: itemID,
+            name: "Original",
+            updatedAt: Date(timeIntervalSince1970: 1_000),
+            deviceID: "remote"
+        ))
+        try store.shoppingStore.updateItem(
+            itemID: itemID,
+            name: "Local edit",
+            now: Date(timeIntervalSince1970: 3_000)
+        )
+
+        store.importData(try encoded(snapshot(
+            itemID: itemID,
+            name: "Stale remote",
+            updatedAt: Date(timeIntervalSince1970: 2_000),
+            deviceID: "remote"
+        )))
+
+        XCTAssertEqual(store.shoppingStore.item(id: itemID)?.name, "Local edit")
+        XCTAssertEqual(
+            store.shoppingStore.item(id: itemID)?.updatedAt,
+            Date(timeIntervalSince1970: 3_000)
+        )
+    }
+
+    func testImportDataAppliesNewerRemoteEdit() throws {
+        let store = DataStore(inMemory: true, deviceID: "local")
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        try store.shoppingStore.apply(snapshot: snapshot(
+            itemID: itemID,
+            name: "Local",
+            updatedAt: Date(timeIntervalSince1970: 1_000),
+            deviceID: "local"
+        ))
+
+        store.importData(try encoded(snapshot(
+            itemID: itemID,
+            name: "New remote",
+            updatedAt: Date(timeIntervalSince1970: 2_000),
+            deviceID: "remote"
+        )))
+
+        XCTAssertEqual(store.shoppingStore.item(id: itemID)?.name, "New remote")
+        XCTAssertEqual(
+            store.shoppingStore.item(id: itemID)?.updatedAt,
+            Date(timeIntervalSince1970: 2_000)
+        )
+    }
+
+    func testImportDataAcceptsUnversionedLegacyJSON() throws {
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let json = """
+        {
+          "items": [{
+            "id": "\(itemID.uuidString)",
+            "name": "Legacy milk",
+            "isCompleted": false,
+            "createdAt": "1970-01-01T00:16:40Z",
+            "sortOrder": 0,
+            "tagIds": []
+          }],
+          "tags": []
+        }
+        """.data(using: .utf8)!
+
+        dataStore.importData(json)
+
+        XCTAssertEqual(dataStore.items.first?.name, "Legacy milk")
+        XCTAssertEqual(dataStore.items.first?.updatedAt, Date(timeIntervalSince1970: 1_000))
+        XCTAssertEqual(dataStore.items.first?.lastEditorDeviceID, "legacy")
+        XCTAssertNil(dataStore.lastError)
+    }
+
+    func testImportDataReportsDecodeFailure() {
+        dataStore.importData(Data("not json".utf8))
+
+        guard case .fetchFailed = dataStore.lastError else {
+            return XCTFail("Expected typed decode failure")
+        }
+    }
+
+    private func snapshot(
+        itemID: UUID,
+        name: String,
+        updatedAt: Date,
+        deviceID: String
+    ) -> SyncSnapshot {
+        SyncSnapshot(
+            version: SyncSnapshot.currentVersion,
+            generatedAt: updatedAt,
+            items: [
+                ItemSnapshot(
+                    id: itemID,
+                    name: name,
+                    isCompleted: false,
+                    createdAt: Date(timeIntervalSince1970: 1_000),
+                    completedAt: nil,
+                    updatedAt: updatedAt,
+                    deletedAt: nil,
+                    sortOrder: 0,
+                    tagIDs: [],
+                    lastEditorDeviceID: deviceID
+                )
+            ],
+            tags: []
+        )
+    }
+
+    private func encoded(_ snapshot: SyncSnapshot) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(snapshot)
+    }
 }

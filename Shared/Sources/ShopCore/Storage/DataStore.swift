@@ -176,12 +176,8 @@ public final class DataStore: ObservableObject {
     public func exportData() -> Data? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let export = ExportData(
-            items: shoppingStore.allItems.map(ExportItem.init),
-            tags: shoppingStore.allTags.map(ExportTag.init)
-        )
         do {
-            return try encoder.encode(export)
+            return try encoder.encode(shoppingStore.makeSnapshot())
         } catch {
             return nil
         }
@@ -191,7 +187,7 @@ public final class DataStore: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
-            let snapshot = try decoder.decode(ExportData.self, from: data)
+            let snapshot = try decoder.decode(SyncSnapshot.self, from: data)
             performMutation {
                 try shoppingStore.apply(snapshot: snapshot)
             }

@@ -401,6 +401,15 @@ public final class ShoppingStore {
     }
 
     public func apply(snapshot: SyncSnapshot) throws {
+        let localSnapshot = try makeSnapshot()
+        let mergedSnapshot = SnapshotMerger().merge(
+            local: localSnapshot,
+            remote: snapshot
+        )
+        try applyCanonical(snapshot: mergedSnapshot)
+    }
+
+    private func applyCanonical(snapshot: SyncSnapshot) throws {
         var insertedTags: [Tag] = []
         for tagSnapshot in snapshot.tags {
             let tag = tag(id: tagSnapshot.id) ?? {

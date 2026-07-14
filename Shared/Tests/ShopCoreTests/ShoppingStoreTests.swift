@@ -136,6 +136,51 @@ final class ShoppingStoreTests: XCTestCase {
         XCTAssertEqual(store.tag(id: tagID)?.lastEditorDeviceID, "iphone")
     }
 
+    func testLegacyExportDataImportCannotReviveNewerTombstone() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "local")
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let createdAt = Date(timeIntervalSince1970: 1_000)
+        let deletedAt = Date(timeIntervalSince1970: 3_000)
+        try store.apply(snapshot: ExportData(
+            items: [
+                ExportItem(
+                    id: itemID,
+                    name: "Milk",
+                    isCompleted: false,
+                    createdAt: createdAt,
+                    completedAt: nil,
+                    sortOrder: 0,
+                    tagIds: [],
+                    updatedAt: createdAt,
+                    deletedAt: nil,
+                    lastEditorDeviceID: "remote"
+                )
+            ],
+            tags: []
+        ))
+        try store.softDeleteItem(itemID: itemID, now: deletedAt)
+
+        try store.apply(snapshot: ExportData(
+            items: [
+                ExportItem(
+                    id: itemID,
+                    name: "Milk",
+                    isCompleted: false,
+                    createdAt: createdAt,
+                    completedAt: nil,
+                    sortOrder: 0,
+                    tagIds: [],
+                    updatedAt: Date(timeIntervalSince1970: 2_000),
+                    deletedAt: nil,
+                    lastEditorDeviceID: "remote"
+                )
+            ],
+            tags: []
+        ))
+
+        XCTAssertEqual(store.item(id: itemID)?.deletedAt, deletedAt)
+    }
+
     func testModelDefaultsDeriveVersionFromCreationDate() {
         let creationDate = Date(timeIntervalSince1970: 123)
 
