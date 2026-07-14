@@ -8,7 +8,6 @@ struct ShopMacApp: App {
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
-    @AppStorage("webdav_password") private var webdavPassword = ""
 
     var body: some Scene {
         WindowGroup {
@@ -17,14 +16,14 @@ struct ShopMacApp: App {
                 .environmentObject(webdavSync)
                 .frame(minWidth: 400, idealWidth: 480, minHeight: 500, idealHeight: 700)
                 .onAppear {
-                    webdavSync.configure(with: dataStore)
-                    if !webdavServer.isEmpty {
-                        webdavSync.configure(
-                            serverURL: webdavServer,
-                            username: webdavUsername,
-                            password: webdavPassword
-                        )
-                    }
+                    webdavSync.migrateLegacyPasswordIfNeeded(
+                        serverURL: webdavServer,
+                        username: webdavUsername
+                    )
+                    webdavSync.restoreCredentials(
+                        serverURL: webdavServer,
+                        username: webdavUsername
+                    )
                 }
         }
         .windowStyle(.hiddenTitleBar)

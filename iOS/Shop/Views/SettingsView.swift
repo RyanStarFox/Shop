@@ -10,10 +10,9 @@ struct SettingsView: View {
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
-    @AppStorage("webdav_password") private var webdavPassword = ""
     @AppStorage("appearance_mode") private var appearanceMode = "system"
+    @State private var webdavPassword = ""
     @State private var showTagManagement = false
-    @State private var syncTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -115,16 +114,18 @@ struct SettingsView: View {
                                     systemImage: "arrow.triangle.2.circlepath",
                                     isFullWidth: true
                                 ) {
-                                    syncTask = Task {
-                                        webdavSync.configure(
+                                    do {
+                                        try webdavSync.saveCredentials(
                                             serverURL: webdavServer,
                                             username: webdavUsername,
                                             password: webdavPassword
                                         )
-                                        await webdavSync.autoSync()
+                                        webdavPassword = ""
+                                    } catch {
+                                        // The service exposes the localized error without revealing credentials.
                                     }
                                 }
-                                .disabled(webdavServer.isEmpty)
+                                .disabled(webdavServer.isEmpty || webdavUsername.isEmpty)
 
                                 if let error = webdavSync.error {
                                     Text(error)
@@ -189,7 +190,17 @@ struct SettingsView: View {
                     .presentationCornerRadius(32)
             }
             .onDisappear {
-                syncTask?.cancel()
+                webdavPassword = ""
+            }
+            .onAppear {
+                webdavSync.migrateLegacyPasswordIfNeeded(
+                    serverURL: webdavServer,
+                    username: webdavUsername
+                )
+                webdavSync.restoreCredentials(
+                    serverURL: webdavServer,
+                    username: webdavUsername
+                )
             }
         }
     }
