@@ -103,7 +103,11 @@ struct WebDAVSettingsTab: View {
 
                     Spacer()
 
-                    if let lastSync {
+                    if let error {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else if let lastSync {
                         Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -111,10 +115,6 @@ struct WebDAVSettingsTab: View {
                         Text(ShopStrings.webdavConfigured)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else if let error {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
                     }
                 }
             }

@@ -138,16 +138,14 @@ struct SettingsView: View {
                                 if webdavSync.isSyncing {
                                     ProgressView(ShopStrings.syncing)
                                         .font(.caption)
+                                } else if let error = webdavSync.error {
+                                    Text(error)
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
                                 } else if let lastSync = webdavSync.lastSyncDate {
                                     Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                }
-
-                                if let error = webdavSync.error {
-                                    Text(error)
-                                        .font(.caption)
-                                        .foregroundStyle(.red)
                                 }
                             }
                         }
