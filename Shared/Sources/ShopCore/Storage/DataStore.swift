@@ -6,9 +6,13 @@ import Combine
 public final class DataStore: ObservableObject {
     public let modelContainer: ModelContainer
     public let modelContext: ModelContext
+    public let shoppingStore: ShoppingStore
 
     @Published public var items: [ShoppingItem] = []
+    @Published public var activeItems: [ShoppingItem] = []
+    @Published public var archivedItems: [ShoppingItem] = []
     @Published public var tags: [Tag] = []
+    @Published public var lastError: ShoppingStoreError?
     @Published public var selectedFilter: FilterOption = .all
     @Published public var selectedTags: Set<UUID> = []
     @Published public var dateRange: ClosedRange<Date>?
@@ -22,32 +26,25 @@ public final class DataStore: ObservableObject {
         case month
     }
 
-    public init(inMemory: Bool = false) {
-        let schema = Schema([ShoppingItem.self, Tag.self])
-        let config = ModelConfiguration(isStoredInMemoryOnly: inMemory)
+    public init(inMemory: Bool = false, deviceID: String? = nil) {
         do {
-            modelContainer = try ModelContainer(for: schema, configurations: [config])
-            modelContext = modelContainer.mainContext
+            shoppingStore = try ShoppingStore(
+                inMemory: inMemory,
+                deviceID: deviceID ?? Self.stableDeviceID()
+            )
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            fatalError("Failed to create ShoppingStore: \(error)")
         }
+        modelContainer = shoppingStore.modelContainer
+        modelContext = shoppingStore.modelContext
         fetchData()
     }
 
     public func fetchData() {
-        do {
-            let itemDescriptor = FetchDescriptor<ShoppingItem>(
-                sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.createdAt, order: .reverse)]
-            )
-            items = try modelContext.fetch(itemDescriptor)
-
-            let tagDescriptor = FetchDescriptor<Tag>(
-                sortBy: [SortDescriptor(\.name)]
-            )
-            tags = try modelContext.fetch(tagDescriptor)
-        } catch {
-            print("Fetch failed: \(error)")
-        }
+        activeItems = shoppingStore.activeItems
+        archivedItems = shoppingStore.archivedItems
+        items = activeItems + archivedItems
+        tags = shoppingStore.tags
     }
 
     public var filteredItems: [ShoppingItem] {
@@ -89,122 +86,190 @@ public final class DataStore: ObservableObject {
     // MARK: - Item operations
 
     public func addItem(name: String, tags: [Tag] = []) {
-        let maxOrder = items.map(\.sortOrder).max() ?? -1
-        let item = ShoppingItem(name: name, createdAt: Date(), sortOrder: maxOrder + 1, tags: tags)
-        modelContext.insert(item)
-        save()
+        performMutation {
+            _ = try shoppingStore.addItem(name: name, tagIDs: tags.map(\.id))
+        }
     }
 
     public func toggleItem(_ item: ShoppingItem) {
-        item.isCompleted.toggle()
-        item.completedAt = item.isCompleted ? Date() : nil
-        save()
+        performMutation {
+            try shoppingStore.setCompleted(
+                itemID: item.id,
+                completed: !item.isCompleted
+            )
+        }
     }
 
     public func deleteItem(_ item: ShoppingItem) {
-        modelContext.delete(item)
-        save()
+        performMutation {
+            try shoppingStore.softDeleteItem(itemID: item.id)
+        }
     }
 
     public func updateItem(_ item: ShoppingItem, name: String? = nil, tags: [Tag]? = nil) {
-        if let name = name { item.name = name }
-        if let tags = tags { item.tags = tags }
-        save()
+        performMutation {
+            try shoppingStore.updateItem(
+                itemID: item.id,
+                name: name,
+                tagIDs: tags?.map(\.id)
+            )
+        }
     }
 
     public func moveItems(from source: IndexSet, to destination: Int) {
-        var mutable = items
-        mutable.move(fromOffsets: source, toOffset: destination)
-        for (index, item) in mutable.enumerated() {
-            item.sortOrder = index
+        guard selectedFilter == .active,
+              selectedTags.isEmpty,
+              dateRange == nil else {
+            return
         }
-        save()
+        performMutation {
+            try shoppingStore.moveActiveItems(from: source, to: destination)
+        }
     }
 
     // MARK: - Tag operations
 
     public func addTag(name: String, colorHex: String = "#007AFF") {
-        let tag = Tag(name: name, colorHex: colorHex)
-        modelContext.insert(tag)
-        save()
+        performMutation {
+            _ = try shoppingStore.addTag(name: name, colorHex: colorHex)
+        }
     }
 
     public func deleteTag(_ tag: Tag) {
-        modelContext.delete(tag)
-        save()
+        performMutation {
+            try shoppingStore.deleteTag(id: tag.id)
+        }
     }
 
     public func updateTag(_ tag: Tag, name: String? = nil, colorHex: String? = nil) {
-        if let name = name { tag.name = name }
-        if let colorHex = colorHex { tag.colorHex = colorHex }
-        save()
+        performMutation {
+            try shoppingStore.updateTag(
+                id: tag.id,
+                name: name,
+                colorHex: colorHex
+            )
+        }
     }
 
     // MARK: - Sync support
 
     public func importItems(_ importedItems: [ShoppingItem]) {
-        for imported in importedItems {
-            if !items.contains(where: { $0.id == imported.id }) {
-                modelContext.insert(imported)
-            }
+        let snapshot = ExportData(
+            items: importedItems.map(ExportItem.init),
+            tags: []
+        )
+        performMutation {
+            try shoppingStore.apply(snapshot: snapshot)
         }
-        save()
     }
 
     public func importTags(_ importedTags: [Tag]) {
-        for imported in importedTags {
-            if !tags.contains(where: { $0.id == imported.id }) {
-                modelContext.insert(imported)
-            }
+        let snapshot = ExportData(
+            items: [],
+            tags: importedTags.map(ExportTag.init)
+        )
+        performMutation {
+            try shoppingStore.apply(snapshot: snapshot)
         }
-        save()
     }
 
     public func exportData() -> Data? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let export = ExportData(items: items.map(ExportItem.init), tags: tags.map(ExportTag.init))
-        return try? encoder.encode(export)
+        let export = ExportData(
+            items: shoppingStore.allItems.map(ExportItem.init),
+            tags: shoppingStore.allTags.map(ExportTag.init)
+        )
+        do {
+            return try encoder.encode(export)
+        } catch {
+            return nil
+        }
     }
 
     public func importData(_ data: Data) {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let export = try? decoder.decode(ExportData.self, from: data) else { return }
-
-        let importedTags = export.tags.map { $0.toTag() }
-        importTags(importedTags)
-
-        let importedItems = export.items.map { exportItem -> ShoppingItem in
-            let item = exportItem.toItem()
-            let tagIds = Set(exportItem.tagIds)
-            item.tags = importedTags.filter { tagIds.contains($0.id) }
-            return item
+        do {
+            let snapshot = try decoder.decode(ExportData.self, from: data)
+            performMutation {
+                try shoppingStore.apply(snapshot: snapshot)
+            }
+        } catch {
+            lastError = .fetchFailed(error.localizedDescription)
         }
-        importItems(importedItems)
     }
 
-    private func save() {
-        try? modelContext.save()
+    private func performMutation(_ mutation: () throws -> Void) {
+        do {
+            try mutation()
+            lastError = nil
+        } catch let error as ShoppingStoreError {
+            lastError = error
+        } catch {
+            lastError = .saveFailed(error.localizedDescription)
+        }
         fetchData()
+    }
+
+    private static func stableDeviceID() -> String {
+        let key = "shop.device-id"
+        if let existing = UserDefaults.standard.string(forKey: key) {
+            return existing
+        }
+        let generated = UUID().uuidString
+        UserDefaults.standard.set(generated, forKey: key)
+        return generated
     }
 }
 
 // MARK: - Export/Import DTOs
 
-struct ExportData: Codable {
-    let items: [ExportItem]
-    let tags: [ExportTag]
+public struct ExportData: Codable {
+    public let items: [ExportItem]
+    public let tags: [ExportTag]
+
+    public init(items: [ExportItem], tags: [ExportTag]) {
+        self.items = items
+        self.tags = tags
+    }
 }
 
-struct ExportItem: Codable {
-    let id: UUID
-    let name: String
-    let isCompleted: Bool
-    let createdAt: Date
-    let completedAt: Date?
-    let sortOrder: Int
-    let tagIds: [UUID]
+public struct ExportItem: Codable {
+    public let id: UUID
+    public let name: String
+    public let isCompleted: Bool
+    public let createdAt: Date
+    public let completedAt: Date?
+    public let sortOrder: Int
+    public let tagIds: [UUID]
+    public let updatedAt: Date?
+    public let deletedAt: Date?
+    public let lastEditorDeviceID: String?
+
+    public init(
+        id: UUID,
+        name: String,
+        isCompleted: Bool,
+        createdAt: Date,
+        completedAt: Date?,
+        sortOrder: Int,
+        tagIds: [UUID],
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        lastEditorDeviceID: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.isCompleted = isCompleted
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+        self.sortOrder = sortOrder
+        self.tagIds = tagIds
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.lastEditorDeviceID = lastEditorDeviceID
+    }
 
     init(from item: ShoppingItem) {
         self.id = item.id
@@ -214,31 +279,69 @@ struct ExportItem: Codable {
         self.completedAt = item.completedAt
         self.sortOrder = item.sortOrder
         self.tagIds = item.tags.map(\.id)
+        self.updatedAt = item.updatedAt
+        self.deletedAt = item.deletedAt
+        self.lastEditorDeviceID = item.lastEditorDeviceID
     }
 
     func toItem() -> ShoppingItem {
         ShoppingItem(
             id: id, name: name, isCompleted: isCompleted,
             createdAt: createdAt, completedAt: completedAt,
-            sortOrder: sortOrder, tags: []
+            sortOrder: sortOrder, updatedAt: updatedAt,
+            deletedAt: deletedAt,
+            lastEditorDeviceID: lastEditorDeviceID ?? "",
+            tags: []
         )
     }
 }
 
-struct ExportTag: Codable {
-    let id: UUID
-    let name: String
-    let colorHex: String
-    let createdAt: Date
+public struct ExportTag: Codable {
+    public let id: UUID
+    public let name: String
+    public let colorHex: String
+    public let createdAt: Date
+    public let updatedAt: Date?
+    public let deletedAt: Date?
+    public let lastEditorDeviceID: String?
+
+    public init(
+        id: UUID,
+        name: String,
+        colorHex: String,
+        createdAt: Date,
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        lastEditorDeviceID: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.colorHex = colorHex
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.lastEditorDeviceID = lastEditorDeviceID
+    }
 
     init(from tag: Tag) {
         self.id = tag.id
         self.name = tag.name
         self.colorHex = tag.colorHex
         self.createdAt = tag.createdAt
+        self.updatedAt = tag.updatedAt
+        self.deletedAt = tag.deletedAt
+        self.lastEditorDeviceID = tag.lastEditorDeviceID
     }
 
     func toTag() -> Tag {
-        Tag(id: id, name: name, colorHex: colorHex, createdAt: createdAt)
+        Tag(
+            id: id,
+            name: name,
+            colorHex: colorHex,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt,
+            lastEditorDeviceID: lastEditorDeviceID ?? ""
+        )
     }
 }

@@ -52,6 +52,26 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(dataStore.filteredItems.first?.name, "Item 1")
     }
 
+    func testMoveItemsDoesNotReorderFullCollectionWhileFiltered() {
+        dataStore.addTag(name: "Selected")
+        let tag = dataStore.tags.first!
+        dataStore.addItem(name: "First", tags: [tag])
+        dataStore.addItem(name: "Second")
+        dataStore.addItem(name: "Third", tags: [tag])
+        let originalOrders = Dictionary(
+            uniqueKeysWithValues: dataStore.items.map { ($0.id, $0.sortOrder) }
+        )
+        dataStore.selectedFilter = .active
+        dataStore.selectedTags = [tag.id]
+
+        dataStore.moveItems(from: IndexSet(integer: 0), to: 2)
+
+        XCTAssertEqual(
+            Dictionary(uniqueKeysWithValues: dataStore.items.map { ($0.id, $0.sortOrder) }),
+            originalOrders
+        )
+    }
+
     // MARK: - Tag tests
 
     func testAddTag() {

@@ -9,6 +9,9 @@ public final class ShoppingItem: Identifiable, Hashable {
     public var createdAt: Date
     public var completedAt: Date?
     public var sortOrder: Int
+    public var updatedAt: Date = Date(timeIntervalSince1970: 0)
+    public var deletedAt: Date? = nil
+    public var lastEditorDeviceID: String = ""
     @Relationship(deleteRule: .nullify) public var tags: [Tag]
 
     public init(
@@ -18,6 +21,9 @@ public final class ShoppingItem: Identifiable, Hashable {
         createdAt: Date = Date(),
         completedAt: Date? = nil,
         sortOrder: Int = 0,
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        lastEditorDeviceID: String = "",
         tags: [Tag] = []
     ) {
         self.id = id
@@ -26,6 +32,9 @@ public final class ShoppingItem: Identifiable, Hashable {
         self.createdAt = createdAt
         self.completedAt = completedAt
         self.sortOrder = sortOrder
+        self.updatedAt = updatedAt ?? createdAt
+        self.deletedAt = deletedAt
+        self.lastEditorDeviceID = lastEditorDeviceID
         self.tags = tags
     }
 }
