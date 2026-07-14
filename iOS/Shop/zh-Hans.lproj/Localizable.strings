@@ -1,0 +1,66 @@
+/* App */
+"app.name" = "Shop!";
+
+/* Items */
+"item.add" = "添加物品";
+"item.name" = "物品名称";
+"item.delete" = "删除";
+"item.mark_complete" = "标记完成";
+"item.mark_incomplete" = "取消完成";
+"item.empty" = "还没有物品，点击 + 添加吧！";
+"item.search" = "搜索物品...";
+
+/* Tags */
+"tags.title" = "标签";
+"tag.add" = "添加标签";
+"tag.name" = "标签名称";
+"tag.color" = "颜色";
+"tag.manage" = "管理标签";
+"tag.none" = "无标签";
+
+/* Filter */
+"filter.title" = "筛选";
+"filter.all" = "全部";
+"filter.active" = "未完成";
+"filter.completed" = "已完成";
+"filter.today" = "今天";
+"filter.week" = "本周";
+"filter.month" = "本月";
+
+/* Settings */
+"settings.title" = "设置";
+"settings.sync" = "同步";
+"settings.webdav" = "WebDAV 配置";
+"settings.webdav_server" = "服务器地址";
+"settings.webdav_username" = "用户名";
+"settings.webdav_password" = "密码";
+"settings.sync_now" = "立即同步";
+"settings.language" = "语言";
+"settings.appearance" = "外观";
+"settings.dark_mode" = "深色模式";
+"settings.about" = "关于";
+
+/* Time */
+"time.added_at" = "添加于";
+"time.just_now" = "刚刚";
+"time.minutes_ago" = "%d 分钟前";
+"time.hours_ago" = "%d 小时前";
+"time.days_ago" = "%d 天前";
+
+/* Sync */
+"sync.available" = "可同步";
+"sync.not_available" = "不可用";
+"sync.syncing" = "同步中...";
+"sync.last_sync" = "上次同步";
+"sync.wifi_status" = "WiFi 同步";
+"sync.webdav_status" = "WebDAV 同步";
+
+/* WebDAV */
+"webdav.not_configured" = "未配置 WebDAV";
+"webdav.upload_failed" = "上传失败，请检查服务器设置";
+"webdav.download_failed" = "下载失败，请检查服务器设置";
+"webdav.configured" = "WebDAV 已配置";
+
+/* Errors */
+"error.unknown" = "未知错误";
+"error.sync_failed" = "同步失败";

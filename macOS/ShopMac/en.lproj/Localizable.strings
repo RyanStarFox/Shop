@@ -1,0 +1,66 @@
+/* App */
+"app.name" = "Shop!";
+
+/* Items */
+"item.add" = "Add Item";
+"item.name" = "Item name";
+"item.delete" = "Delete";
+"item.mark_complete" = "Mark complete";
+"item.mark_incomplete" = "Mark incomplete";
+"item.empty" = "No items yet. Tap + to add one!";
+"item.search" = "Search items...";
+
+/* Tags */
+"tags.title" = "Tags";
+"tag.add" = "Add Tag";
+"tag.name" = "Tag name";
+"tag.color" = "Color";
+"tag.manage" = "Manage Tags";
+"tag.none" = "No tags";
+
+/* Filter */
+"filter.title" = "Filter";
+"filter.all" = "All";
+"filter.active" = "Active";
+"filter.completed" = "Completed";
+"filter.today" = "Today";
+"filter.week" = "This Week";
+"filter.month" = "This Month";
+
+/* Settings */
+"settings.title" = "Settings";
+"settings.sync" = "Sync";
+"settings.webdav" = "WebDAV Configuration";
+"settings.webdav_server" = "Server URL";
+"settings.webdav_username" = "Username";
+"settings.webdav_password" = "Password";
+"settings.sync_now" = "Sync Now";
+"settings.language" = "Language";
+"settings.appearance" = "Appearance";
+"settings.dark_mode" = "Dark Mode";
+"settings.about" = "About";
+
+/* Time */
+"time.added_at" = "Added at";
+"time.just_now" = "Just now";
+"time.minutes_ago" = "%d minutes ago";
+"time.hours_ago" = "%d hours ago";
+"time.days_ago" = "%d days ago";
+
+/* Sync */
+"sync.available" = "Available for sync";
+"sync.not_available" = "Not available";
+"sync.syncing" = "Syncing...";
+"sync.last_sync" = "Last sync";
+"sync.wifi_status" = "WiFi Sync";
+"sync.webdav_status" = "WebDAV Sync";
+
+/* WebDAV */
+"webdav.not_configured" = "WebDAV is not configured";
+"webdav.upload_failed" = "Upload failed. Check server settings.";
+"webdav.download_failed" = "Download failed. Check server settings.";
+"webdav.configured" = "WebDAV configured";
+
+/* Errors */
+"error.unknown" = "Unknown error";
+"error.sync_failed" = "Sync failed";
