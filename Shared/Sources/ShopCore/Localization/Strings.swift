@@ -143,6 +143,33 @@ public enum ShopStrings {
     public static var lastSync: String {
         NSLocalizedString("sync.last_sync", comment: "Last sync")
     }
+    public static var watchInvalidSnapshot: String {
+        NSLocalizedString(
+            "watch.error.invalid_snapshot",
+            bundle: .module,
+            comment: "Invalid Watch sync snapshot"
+        )
+    }
+    public static var watchInvalidReply: String {
+        NSLocalizedString(
+            "watch.error.invalid_reply",
+            bundle: .module,
+            comment: "Invalid Watch sync reply"
+        )
+    }
+    public static func watchUnsupportedSnapshotVersion(_ version: Int) -> String {
+        localizedFormat(
+            "watch.error.unsupported_version",
+            version.description,
+            language: nil
+        )
+    }
+    public static func watchFileReadFailed(_ detail: String) -> String {
+        localizedFormat("watch.error.file_read_failed", detail, language: nil)
+    }
+    public static func watchFileCleanupFailed(_ detail: String) -> String {
+        localizedFormat("watch.error.file_cleanup_failed", detail, language: nil)
+    }
 
     // MARK: - WebDAV
     public static var webdavConfigured: String {

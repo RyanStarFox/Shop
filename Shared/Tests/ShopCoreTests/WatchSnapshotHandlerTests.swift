@@ -72,6 +72,54 @@ final class WatchSnapshotHandlerTests: XCTestCase {
         }
     }
 
+    func testFutureSnapshotVersionIsRejectedWithoutDowngrade() throws {
+        let futureVersion = SyncSnapshot.currentVersion + 1
+        let futureData = Data(#"{"version":\#(futureVersion)}"#.utf8)
+
+        XCTAssertThrowsError(
+            try WatchSnapshotHandler().handleReceivedSnapshot(
+                futureData,
+                localSnapshot: snapshot()
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? WatchSnapshotHandlerError,
+                .unsupportedVersion(futureVersion)
+            )
+            XCTAssertFalse(error.localizedDescription.isEmpty)
+        }
+    }
+
+    func testNonPositiveSnapshotVersionIsRejected() {
+        XCTAssertThrowsError(
+            try WatchSnapshotHandler().handleReceivedSnapshot(
+                Data(#"{"version":0}"#.utf8),
+                localSnapshot: snapshot()
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? WatchSnapshotHandlerError,
+                .unsupportedVersion(0)
+            )
+        }
+    }
+
+    func testLegacyVersionOneSnapshotIsAccepted() throws {
+        let legacy = SyncSnapshot(
+            version: 1,
+            generatedAt: t2,
+            items: [],
+            tags: []
+        )
+
+        let result = try WatchSnapshotHandler().handleReceivedSnapshot(
+            encoded(legacy),
+            localSnapshot: snapshot()
+        )
+
+        XCTAssertEqual(result.version, SyncSnapshot.currentVersion)
+    }
+
     private func encoded(_ snapshot: SyncSnapshot) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

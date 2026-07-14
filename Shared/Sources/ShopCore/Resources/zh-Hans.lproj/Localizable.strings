@@ -13,3 +13,8 @@
 "webdav.error.sync_failed" = "无法与 WebDAV 服务器同步。";
 
 "sync.watch_status" = "Apple Watch 同步";
+"watch.error.invalid_snapshot" = "Apple Watch 同步快照无效。";
+"watch.error.invalid_reply" = "Apple Watch 返回了无效的同步响应。";
+"watch.error.unsupported_version" = "不支持 Apple Watch 同步快照版本 %@。";
+"watch.error.file_read_failed" = "无法读取 Apple Watch 同步文件：%@";
+"watch.error.file_cleanup_failed" = "无法删除 Apple Watch 同步临时文件：%@";

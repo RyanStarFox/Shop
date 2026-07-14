@@ -13,3 +13,8 @@
 "webdav.error.sync_failed" = "Unable to sync with the WebDAV server.";
 
 "sync.watch_status" = "Watch Sync";
+"watch.error.invalid_snapshot" = "The Watch sync snapshot is invalid.";
+"watch.error.invalid_reply" = "The Watch returned an invalid sync reply.";
+"watch.error.unsupported_version" = "Watch sync snapshot version %@ is not supported.";
+"watch.error.file_read_failed" = "Unable to read the Watch sync file: %@";
+"watch.error.file_cleanup_failed" = "Unable to remove a Watch sync temporary file: %@";
