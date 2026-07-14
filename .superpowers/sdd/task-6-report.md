@@ -42,3 +42,21 @@ No paired iPhone/Apple Watch hardware session was available. Real-device WatchCo
 - Existing asset-catalog and App Intents metadata warnings remain; no Swift concurrency warnings were emitted.
 
 Paired-device behavior remains unverified because no physical iPhone/Apple Watch pair was available.
+
+## Final review fixes
+
+- Watch transfer files now live in a dedicated temporary directory. Cleanup reads `outstandingFileTransfers` first, canonicalizes paths with standardization and symbolic-link resolution, and removes only service-prefixed files older than 24 hours that are not still queued.
+- Local mutations now pass through an injectable 500 ms debouncer. A newer mutation cancels only the pending sleeper; once sending begins, another mutation schedules a separate follow-up send.
+- Transport teardown uses an isolated deinitializer to cancel pending debounce work and unregister its local-mutation observer.
+
+### Final review verification
+
+- Focused cleanup/debounce/observer tests: 9 passed.
+- Full `swift test`: 78 tests passed.
+- iOS unsigned archive: passed and contains `ShopWatch.app`.
+- watchOS unsigned build: passed.
+- macOS unsigned build: passed.
+- `git diff --check`: passed.
+- Existing asset-catalog and App Intents metadata warnings remain; no Swift concurrency warnings were emitted.
+
+Paired-device WatchConnectivity behavior remains unverified because physical iPhone/Apple Watch hardware was unavailable.

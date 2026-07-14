@@ -26,25 +26,52 @@ public final class WatchConnectivityTransport: NSObject, ObservableObject {
     private static let immediateReplyBudget = 50_000
     private static let temporaryFilePrefix = "shop-watch-snapshot-"
     private static let staleFileAge: TimeInterval = 24 * 60 * 60
+    private static let temporaryDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("shop-watch-sync", isDirectory: true)
+    private let mutationDebouncer = WatchMutationDebouncer()
     private var dataStore: DataStore?
+    private var localMutationObserverID: UUID?
 
     public override init() {
         super.init()
-        cleanStaleTemporaryFiles()
         guard WCSession.isSupported() else { return }
-        WCSession.default.delegate = self
-        WCSession.default.activate()
+        let session = WCSession.default
+        cleanStaleTemporaryFiles(
+            outstandingURLs: session.outstandingFileTransfers.map(
+                \.file.fileURL
+            )
+        )
+        session.delegate = self
+        session.activate()
+    }
+
+    isolated deinit {
+        mutationDebouncer.cancel()
+        if let dataStore, let localMutationObserverID {
+            dataStore.removeLocalMutationObserver(localMutationObserverID)
+        }
     }
 
     public func configure(with dataStore: DataStore) {
         guard self.dataStore !== dataStore else { return }
+        mutationDebouncer.cancel()
+        if let currentStore = self.dataStore, let localMutationObserverID {
+            currentStore.removeLocalMutationObserver(localMutationObserverID)
+        }
         self.dataStore = dataStore
-        dataStore.addLocalMutationObserver { [weak self] in
+        localMutationObserverID = dataStore.addLocalMutationObserver { [weak self] in
+            self?.scheduleMutationSync()
+        }
+    }
+
+    private func scheduleMutationSync() {
+        mutationDebouncer.schedule { [weak self] in
             self?.sendLatestSnapshot()
         }
     }
 
     public func sendLatestSnapshot() {
+        mutationDebouncer.cancel()
         guard let data = encodedSnapshot() else { return }
         publishLatestSnapshot(data)
 
@@ -144,11 +171,15 @@ public final class WatchConnectivityTransport: NSObject, ObservableObject {
     }
 
     private func transferSnapshotFile(_ data: Data) {
-        let url = FileManager.default.temporaryDirectory
+        let url = Self.temporaryDirectory
             .appendingPathComponent(
                 "\(Self.temporaryFilePrefix)\(UUID().uuidString).json"
             )
         do {
+            try FileManager.default.createDirectory(
+                at: Self.temporaryDirectory,
+                withIntermediateDirectories: true
+            )
             try data.write(to: url, options: .atomic)
             WCSession.default.transferFile(
                 url,
@@ -173,24 +204,39 @@ public final class WatchConnectivityTransport: NSObject, ObservableObject {
         }
     }
 
-    private func cleanStaleTemporaryFiles(now: Date = Date()) {
-        let directory = FileManager.default.temporaryDirectory
+    private func cleanStaleTemporaryFiles(
+        outstandingURLs: [URL],
+        now: Date = Date()
+    ) {
         do {
+            guard FileManager.default.fileExists(
+                atPath: Self.temporaryDirectory.path
+            ) else {
+                return
+            }
             let urls = try FileManager.default.contentsOfDirectory(
-                at: directory,
+                at: Self.temporaryDirectory,
                 includingPropertiesForKeys: [.contentModificationDateKey],
                 options: [.skipsHiddenFiles]
             )
-            for url in urls where url.lastPathComponent.hasPrefix(
-                Self.temporaryFilePrefix
-            ) {
+            let records = try urls.map { url in
                 let values = try url.resourceValues(
                     forKeys: [.contentModificationDateKey]
                 )
-                guard let modifiedAt = values.contentModificationDate,
-                      now.timeIntervalSince(modifiedAt) >= Self.staleFileAge else {
-                    continue
-                }
+                return WatchTemporaryFileRecord(
+                    url: url,
+                    modifiedAt: values.contentModificationDate ?? now
+                )
+            }
+            let candidates = WatchTemporaryFileCleanup.candidates(
+                from: records,
+                outstandingURLs: outstandingURLs,
+                serviceDirectory: Self.temporaryDirectory,
+                filePrefix: Self.temporaryFilePrefix,
+                olderThan: Self.staleFileAge,
+                now: now
+            )
+            for url in candidates {
                 try FileManager.default.removeItem(at: url)
             }
         } catch {
@@ -216,8 +262,13 @@ extension WatchConnectivityTransport: WCSessionDelegate {
     ) {
         let reachable = session.isReachable
         let errorDescription = error?.localizedDescription
+        let outstandingURLs = session.outstandingFileTransfers.map(
+            \.file.fileURL
+        )
         Task { @MainActor [weak self] in
-            self?.cleanStaleTemporaryFiles()
+            self?.cleanStaleTemporaryFiles(
+                outstandingURLs: outstandingURLs
+            )
             self?.isReachable = reachable
             if let errorDescription {
                 self?.lastError = errorDescription
@@ -272,6 +323,7 @@ extension WatchConnectivityTransport: WCSessionDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             if action == WatchMessageProtocol.requestSnapshotAction {
+                self.mutationDebouncer.cancel()
                 guard let snapshot = self.encodedSnapshot() else {
                     reply.send(WatchMessageProtocol.makeDeferredReply())
                     return

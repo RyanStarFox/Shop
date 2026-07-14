@@ -152,6 +152,18 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(secondObserverCalls, 1)
     }
 
+    func testRemovedLocalMutationObserverIsNotCalled() {
+        var observerCalls = 0
+        let observerID = dataStore.addLocalMutationObserver {
+            observerCalls += 1
+        }
+
+        dataStore.removeLocalMutationObserver(observerID)
+        dataStore.addItem(name: "Local")
+
+        XCTAssertEqual(observerCalls, 0)
+    }
+
     func testImportDataDoesNotReviveNewerLocalTombstone() throws {
         let store = DataStore(inMemory: true, deviceID: "local")
         let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!

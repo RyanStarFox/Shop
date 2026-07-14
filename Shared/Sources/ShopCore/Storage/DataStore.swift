@@ -195,8 +195,17 @@ public final class DataStore: ObservableObject {
         }
     }
 
-    public func addLocalMutationObserver(_ observer: @escaping () -> Void) {
-        localMutationObservers[UUID()] = observer
+    @discardableResult
+    public func addLocalMutationObserver(
+        _ observer: @escaping () -> Void
+    ) -> UUID {
+        let id = UUID()
+        localMutationObservers[id] = observer
+        return id
+    }
+
+    public func removeLocalMutationObserver(_ id: UUID) {
+        localMutationObservers.removeValue(forKey: id)
     }
 
     public func applyRemoteSnapshot(_ snapshot: SyncSnapshot) {
