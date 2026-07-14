@@ -44,11 +44,16 @@ public final class WiFiSyncService: NSObject, ObservableObject {
             "timestamp": Date().timeIntervalSince1970
         ]
         WCSession.default.sendMessage(message, replyHandler: { [weak self] _ in
-            self?.isSyncing = false
-            self?.lastSyncDate = Date()
+            Task { @MainActor [weak self] in
+                self?.isSyncing = false
+                self?.lastSyncDate = Date()
+            }
         }, errorHandler: { [weak self] error in
-            print("WiFi sync failed: \(error)")
-            self?.isSyncing = false
+            let errorDescription = String(describing: error)
+            Task { @MainActor [weak self] in
+                print("WiFi sync failed: \(errorDescription)")
+                self?.isSyncing = false
+            }
         })
     }
 
@@ -57,51 +62,84 @@ public final class WiFiSyncService: NSObject, ObservableObject {
             print("Message failed: \(error)")
         }
     }
+
+    private func handleReachabilityChange(_ reachable: Bool) {
+        isReachable = reachable
+        guard reachable, !pendingMessages.isEmpty else { return }
+
+        let messages = pendingMessages
+        pendingMessages.removeAll()
+        for message in messages {
+            WCSession.default.sendMessage(
+                [
+                    "action": "syncData",
+                    "payload": message,
+                    "timestamp": Date().timeIntervalSince1970
+                ],
+                replyHandler: nil
+            )
+        }
+    }
 }
 
-extension WiFiSyncService: @preconcurrency WCSessionDelegate {
-    public func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
-        if let error = error {
-            print("WCSession activation failed: \(error)")
+extension WiFiSyncService: WCSessionDelegate {
+    public nonisolated func session(
+        _ session: WCSession,
+        activationDidCompleteWith state: WCSessionActivationState,
+        error: Error?
+    ) {
+        let reachable = session.isReachable
+        let errorDescription = error.map { String(describing: $0) }
+        Task { @MainActor [weak self] in
+            if let errorDescription {
+                print("WCSession activation failed: \(errorDescription)")
+            }
+            self?.handleReachabilityChange(reachable)
         }
-        isReachable = session.isReachable
     }
 
     #if os(iOS)
-    public func sessionDidBecomeInactive(_ session: WCSession) {}
-    public func sessionDidDeactivate(_ session: WCSession) {
-        session.activate()
+    public nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
+
+    public nonisolated func sessionDidDeactivate(_ session: WCSession) {
+        Task { @MainActor in
+            WCSession.default.activate()
+        }
     }
     #endif
 
-    public func sessionReachabilityDidChange(_ session: WCSession) {
-        isReachable = session.isReachable
-        if isReachable, !pendingMessages.isEmpty {
-            for message in pendingMessages where session.isReachable {
-                session.sendMessage(["action": "syncData", "payload": message, "timestamp": Date().timeIntervalSince1970], replyHandler: nil)
-            }
-            pendingMessages.removeAll()
+    public nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        let reachable = session.isReachable
+        Task { @MainActor [weak self] in
+            self?.handleReachabilityChange(reachable)
         }
     }
 
-    public func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+    public nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let action = message["action"] as? String else { return }
-        switch action {
-        case "requestSync":
-            pushData()
-        case "syncData":
-            if let payload = message["payload"] as? Data {
-                dataStore?.importData(payload)
-                lastSyncDate = Date()
+        let payload = (message["payload"] as? Data).map { Data($0) }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            switch action {
+            case "requestSync":
+                pushData()
+            case "syncData":
+                if let payload {
+                    dataStore?.importData(payload)
+                    lastSyncDate = Date()
+                }
+            default:
+                break
             }
-        default:
-            break
         }
     }
 
-    public func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
-        dataStore?.importData(messageData)
-        lastSyncDate = Date()
+    public nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
+        let data = Data(messageData)
+        Task { @MainActor [weak self] in
+            self?.dataStore?.importData(data)
+            self?.lastSyncDate = Date()
+        }
     }
 }
 #endif
