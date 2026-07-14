@@ -4,6 +4,32 @@ import XCTest
 
 @MainActor
 final class SyncCoordinatorTests: XCTestCase {
+    func testSchedulerCancellationRemovesOnlyCancelledSleeper() async {
+        let scheduler = TestScheduler()
+        let cancelledSleep = Task {
+            await scheduler.sleep(2)
+        }
+        let cancelledSleeperID = await scheduler.waitForNextSleeper()
+
+        cancelledSleep.cancel()
+        await cancelledSleep.value
+
+        let countAfterCancellation = await scheduler.sleeperCount
+        let containsCancelledSleeper = await scheduler.contains(cancelledSleeperID)
+        XCTAssertEqual(countAfterCancellation, 0)
+        XCTAssertFalse(containsCancelledSleeper)
+
+        let activeSleep = Task {
+            await scheduler.sleep(2)
+        }
+        let activeSleeperID = await scheduler.waitForNextSleeper(after: cancelledSleeperID)
+        await scheduler.advance(activeSleeperID)
+        await activeSleep.value
+
+        let countAfterAdvancing = await scheduler.sleeperCount
+        XCTAssertEqual(countAfterAdvancing, 0)
+    }
+
     func testScheduledChangesWithinDebounceProduceOneSync() async throws {
         let store = DataStore(inMemory: true, deviceID: "local")
         store.addItem(name: "Local")
@@ -17,14 +43,26 @@ final class SyncCoordinatorTests: XCTestCase {
         )
 
         coordinator.scheduleSync()
+        let firstSleeperID = await scheduler.waitForNextSleeper()
         coordinator.scheduleSync()
+        let secondSleeperID = await scheduler.waitForNextSleeper(after: firstSleeperID)
+        let containsFirstSleeper = await scheduler.contains(firstSleeperID)
+        XCTAssertFalse(containsFirstSleeper)
+        XCTAssertEqual(transport.fetchCount, 0)
         coordinator.scheduleSync()
-        await scheduler.waitForSleeper()
-        await scheduler.resumeAll()
+        let currentSleeperID = await scheduler.waitForNextSleeper(after: secondSleeperID)
+        let containsSecondSleeper = await scheduler.contains(secondSleeperID)
+        XCTAssertFalse(containsSecondSleeper)
+        XCTAssertEqual(transport.fetchCount, 0)
+        let registeredSleeperCount = await scheduler.sleeperCount
+        XCTAssertEqual(registeredSleeperCount, 1)
+        await scheduler.advance(currentSleeperID)
         await waitUntil { transport.putCount == 1 }
 
         XCTAssertEqual(transport.fetchCount, 1)
         XCTAssertEqual(transport.putCount, 1)
+        let remainingSleeperCount = await scheduler.sleeperCount
+        XCTAssertEqual(remainingSleeperCount, 0)
     }
 
     func testLocalChangeDuringSyncProducesExactlyOneFollowUpPass() async throws {
@@ -139,22 +177,49 @@ final class SyncCoordinatorTests: XCTestCase {
 }
 
 private actor TestScheduler {
-    private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var continuations: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var latestRegisteredID: UUID?
 
     func sleep(_ interval: TimeInterval) async {
-        await withCheckedContinuation { continuations.append($0) }
-    }
-
-    func waitForSleeper() async {
-        while continuations.isEmpty {
-            await Task.yield()
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume()
+                    return
+                }
+                continuations[id] = continuation
+                latestRegisteredID = id
+            }
+        } onCancel: {
+            Task {
+                await self.cancel(id)
+            }
         }
     }
 
-    func resumeAll() {
-        let pending = continuations
-        continuations.removeAll()
-        pending.forEach { $0.resume() }
+    var sleeperCount: Int {
+        continuations.count
+    }
+
+    func contains(_ id: UUID) -> Bool {
+        continuations[id] != nil
+    }
+
+    func waitForNextSleeper(after previousID: UUID? = nil) async -> UUID {
+        while latestRegisteredID == previousID
+                || latestRegisteredID.flatMap({ continuations[$0] }) == nil {
+            await Task.yield()
+        }
+        return latestRegisteredID!
+    }
+
+    func advance(_ id: UUID) {
+        continuations.removeValue(forKey: id)?.resume()
+    }
+
+    private func cancel(_ id: UUID) {
+        continuations.removeValue(forKey: id)?.resume()
     }
 }
 
