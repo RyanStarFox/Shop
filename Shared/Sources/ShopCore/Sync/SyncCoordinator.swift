@@ -51,7 +51,7 @@ public final class SyncCoordinator: ObservableObject {
         self.now = now
         self.sleep = sleep
         status = .idle(lastSuccess: nil)
-        dataStore.onSuccessfulLocalMutation = { [weak self] in
+        dataStore.addLocalMutationObserver { [weak self] in
             self?.scheduleSync()
         }
     }

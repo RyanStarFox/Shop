@@ -3,7 +3,7 @@ import ShopCore
 
 struct SettingsView: View {
     @EnvironmentObject var dataStore: DataStore
-    @EnvironmentObject var wifiSync: WiFiSyncService
+    @EnvironmentObject var watchSync: WatchSyncService
     @EnvironmentObject var webdavSync: WebDAVSyncService
     @EnvironmentObject var syncCoordinator: SyncCoordinator
     @Environment(\.dismiss) var dismiss
@@ -39,17 +39,17 @@ struct SettingsView: View {
                         }
                         .padding(.horizontal)
 
-                        // WiFi Sync Status
+                        // Watch Sync Status
                         GlassCard {
                             VStack(alignment: .leading, spacing: 12) {
-                                Label(ShopStrings.syncWifiStatus, systemImage: "wifi")
+                                Label(ShopStrings.syncWatchStatus, systemImage: "applewatch")
                                     .font(.headline)
 
                                 HStack {
                                     Circle()
-                                        .fill(wifiSync.isReachable ? Color.green : Color.secondary)
+                                        .fill(watchSync.isReachable ? Color.green : Color.secondary)
                                         .frame(width: 8, height: 8)
-                                    Text(wifiSync.isReachable
+                                    Text(watchSync.isReachable
                                         ? ShopStrings.syncAvailable
                                         : ShopStrings.syncNotAvailable
                                     )
@@ -57,7 +57,7 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                                 }
 
-                                if let lastSync = wifiSync.lastSyncDate {
+                                if let lastSync = watchSync.lastSyncDate {
                                     Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
@@ -68,10 +68,8 @@ struct SettingsView: View {
                                     systemImage: "arrow.triangle.2.circlepath",
                                     isFullWidth: true
                                 ) {
-                                    wifiSync.pushData()
+                                    watchSync.sendLatestSnapshot()
                                 }
-                                .disabled(!wifiSync.isReachable)
-                                .opacity(wifiSync.isReachable ? 1 : 0.5)
                             }
                         }
                         .padding(.horizontal)

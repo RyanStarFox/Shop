@@ -131,8 +131,8 @@ public enum ShopStrings {
     public static var syncNotAvailable: String {
         NSLocalizedString("sync.not_available", comment: "Not available")
     }
-    public static var syncWifiStatus: String {
-        NSLocalizedString("sync.wifi_status", comment: "WiFi Sync")
+    public static var syncWatchStatus: String {
+        NSLocalizedString("sync.watch_status", comment: "Watch Sync")
     }
     public static var syncWebdavStatus: String {
         NSLocalizedString("sync.webdav_status", comment: "WebDAV Sync")

@@ -5,15 +5,22 @@ import ShopCore
 @main
 struct ShopWatchApp: App {
     @StateObject private var dataStore = DataStore()
-    @StateObject private var wifiSync = WiFiSyncService()
+    @StateObject private var watchSync = WatchSyncService()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             WatchContentView()
                 .environmentObject(dataStore)
-                .environmentObject(wifiSync)
+                .environmentObject(watchSync)
                 .onAppear {
-                    wifiSync.configure(with: dataStore)
+                    watchSync.configure(with: dataStore)
+                    watchSync.requestLatestSnapshot()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    watchSync.requestLatestSnapshot()
+                    watchSync.sendLatestSnapshot()
                 }
         }
     }

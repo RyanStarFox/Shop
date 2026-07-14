@@ -11,3 +11,5 @@
 "webdav.error.network" = "Unable to reach the WebDAV server.";
 "webdav.error.invalid_server" = "Enter a valid HTTPS WebDAV server address.";
 "webdav.error.sync_failed" = "Unable to sync with the WebDAV server.";
+
+"sync.watch_status" = "Watch Sync";

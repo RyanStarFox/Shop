@@ -4,15 +4,16 @@ import ShopCore
 
 @main
 struct ShopApp: App {
-    @StateObject private var dataStore: DataStore
-    @StateObject private var wifiSync = WiFiSyncService()
+    @StateObject private var dataStore: ShopCore.DataStore
+    @StateObject private var watchSync = WatchSyncService()
     @StateObject private var webdavSync: WebDAVSyncService
     @StateObject private var syncCoordinator: SyncCoordinator
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        let store = DataStore()
+        let store = ShopCore.DataStore()
         let coordinator = SyncCoordinator(dataStore: store)
         _dataStore = StateObject(wrappedValue: store)
         _syncCoordinator = StateObject(wrappedValue: coordinator)
@@ -23,12 +24,12 @@ struct ShopApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(dataStore)
-                .environmentObject(wifiSync)
+                .environmentObject(watchSync)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
                 .tint(.accentColor)
                 .onAppear {
-                    wifiSync.configure(with: dataStore)
+                    watchSync.configure(with: dataStore)
                     webdavSync.migrateLegacyPasswordIfNeeded(
                         serverURL: webdavServer,
                         username: webdavUsername
@@ -37,6 +38,11 @@ struct ShopApp: App {
                         serverURL: webdavServer,
                         username: webdavUsername
                     )
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    watchSync.requestLatestSnapshot()
+                    watchSync.sendLatestSnapshot()
                 }
         }
         .modelContainer(dataStore.modelContainer)

@@ -11,3 +11,5 @@
 "webdav.error.network" = "无法连接 WebDAV 服务器。";
 "webdav.error.invalid_server" = "请输入有效的 HTTPS WebDAV 服务器地址。";
 "webdav.error.sync_failed" = "无法与 WebDAV 服务器同步。";
+
+"sync.watch_status" = "Apple Watch 同步";

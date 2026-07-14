@@ -134,6 +134,24 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(snapshot.items.first?.name, "Milk")
     }
 
+    func testLocalMutationNotifiesAllObserversButRemoteImportDoesNotEcho() throws {
+        var firstObserverCalls = 0
+        var secondObserverCalls = 0
+        dataStore.addLocalMutationObserver { firstObserverCalls += 1 }
+        dataStore.addLocalMutationObserver { secondObserverCalls += 1 }
+
+        dataStore.addItem(name: "Local")
+        dataStore.importData(try encoded(snapshot(
+            itemID: UUID(),
+            name: "Remote",
+            updatedAt: Date(timeIntervalSince1970: 2_000),
+            deviceID: "watch"
+        )))
+
+        XCTAssertEqual(firstObserverCalls, 1)
+        XCTAssertEqual(secondObserverCalls, 1)
+    }
+
     func testImportDataDoesNotReviveNewerLocalTombstone() throws {
         let store = DataStore(inMemory: true, deviceID: "local")
         let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!

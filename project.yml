@@ -51,6 +51,9 @@ targets:
           ENABLE_USER_SCRIPT_SANDBOXING: false
     dependencies:
       - package: ShopCore
+      - target: ShopWatch
+        embed: true
+        codeSign: false
     preBuildScripts:
       - name: "SwiftLint"
         script: |
@@ -121,7 +124,6 @@ schemes:
     build:
       targets:
         Shop: all
-        ShopWatch: all
     run:
       config: Debug
     test:

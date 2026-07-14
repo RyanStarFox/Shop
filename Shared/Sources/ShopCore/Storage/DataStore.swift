@@ -16,7 +16,7 @@ public final class DataStore: ObservableObject {
     @Published public var selectedFilter: FilterOption = .all
     @Published public var selectedTags: Set<UUID> = []
     @Published public var dateRange: ClosedRange<Date>?
-    var onSuccessfulLocalMutation: (() -> Void)?
+    private var localMutationObservers: [UUID: () -> Void] = [:]
 
     public enum FilterOption: String, CaseIterable {
         case all
@@ -189,19 +189,33 @@ public final class DataStore: ObservableObject {
         decoder.dateDecodingStrategy = .iso8601
         do {
             let snapshot = try decoder.decode(SyncSnapshot.self, from: data)
-            performMutation {
-                try shoppingStore.apply(snapshot: snapshot)
-            }
+            applyRemoteSnapshot(snapshot)
         } catch {
             lastError = .fetchFailed(error.localizedDescription)
         }
+    }
+
+    public func addLocalMutationObserver(_ observer: @escaping () -> Void) {
+        localMutationObservers[UUID()] = observer
+    }
+
+    public func applyRemoteSnapshot(_ snapshot: SyncSnapshot) {
+        do {
+            try shoppingStore.apply(snapshot: snapshot)
+            lastError = nil
+        } catch let error as ShoppingStoreError {
+            lastError = error
+        } catch {
+            lastError = .saveFailed(error.localizedDescription)
+        }
+        fetchData()
     }
 
     private func performMutation(_ mutation: () throws -> Void) {
         do {
             try mutation()
             lastError = nil
-            onSuccessfulLocalMutation?()
+            localMutationObservers.values.forEach { $0() }
         } catch let error as ShoppingStoreError {
             lastError = error
         } catch {
