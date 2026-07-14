@@ -11,15 +11,15 @@ public enum ShoppingStoreError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .containerCreationFailed(let message):
-            "Unable to create the shopping store: \(message)"
+            ShopStrings.shoppingStoreContainerCreationFailed(message)
         case .fetchFailed(let message):
-            "Unable to fetch shopping data: \(message)"
+            ShopStrings.shoppingStoreFetchFailed(message)
         case .saveFailed(let message):
-            "Unable to save shopping data: \(message)"
+            ShopStrings.shoppingStoreSaveFailed(message)
         case .itemNotFound(let id):
-            "Shopping item \(id) was not found."
+            ShopStrings.shoppingStoreItemNotFound(id)
         case .tagNotFound(let id):
-            "Tag \(id) was not found."
+            ShopStrings.shoppingStoreTagNotFound(id)
         }
     }
 }
@@ -33,11 +33,22 @@ public final class ShoppingStore {
     private var storedItems: [ShoppingItem]
     private var storedTags: [Tag]
 
-    public init(inMemory: Bool = false, deviceID: String) throws {
+    public init(
+        inMemory: Bool = false,
+        deviceID: String,
+        storeURL: URL? = nil
+    ) throws {
         self.deviceID = deviceID
 
         let schema = Schema([ShoppingItem.self, Tag.self])
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: inMemory)
+        let configuration: ModelConfiguration
+        if inMemory {
+            configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        } else if let storeURL {
+            configuration = ModelConfiguration(schema: schema, url: storeURL)
+        } else {
+            configuration = ModelConfiguration(isStoredInMemoryOnly: false)
+        }
         do {
             modelContainer = try ModelContainer(
                 for: schema,
@@ -54,6 +65,8 @@ public final class ShoppingStore {
         } catch {
             throw ShoppingStoreError.fetchFailed(error.localizedDescription)
         }
+
+        try backfillLegacyVersions()
     }
 
     public var items: [ShoppingItem] {
@@ -391,6 +404,31 @@ public final class ShoppingStore {
             try modelContext.save()
         } catch {
             throw ShoppingStoreError.saveFailed(error.localizedDescription)
+        }
+    }
+
+    private func backfillLegacyVersions() throws {
+        let sentinel = Date(timeIntervalSince1970: 0)
+        let legacyItems = storedItems.filter { $0.updatedAt == sentinel }
+        let legacyTags = storedTags.filter { $0.updatedAt == sentinel }
+        guard !legacyItems.isEmpty || !legacyTags.isEmpty else {
+            return
+        }
+
+        for item in legacyItems {
+            item.updatedAt = item.createdAt
+            item.lastEditorDeviceID = deviceID
+        }
+        for tag in legacyTags {
+            tag.updatedAt = tag.createdAt
+            tag.lastEditorDeviceID = deviceID
+        }
+
+        do {
+            try save()
+        } catch {
+            modelContext.rollback()
+            throw error
         }
     }
 

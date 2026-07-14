@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import ShopCore
 
 @MainActor
@@ -147,5 +148,101 @@ final class ShoppingStoreTests: XCTestCase {
         XCTAssertEqual(tag.updatedAt, creationDate)
         XCTAssertNil(tag.deletedAt)
         XCTAssertEqual(tag.lastEditorDeviceID, "")
+    }
+
+    func testOpeningDiskStoreBackfillsLegacyVersionSentinelsOnlyOnce() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("shop.store")
+        let itemID = UUID()
+        let tagID = UUID()
+        let itemCreatedAt = Date(timeIntervalSince1970: 100)
+        let tagCreatedAt = Date(timeIntervalSince1970: 200)
+
+        try seedLegacySentinelRecords(
+            storeURL: storeURL,
+            itemID: itemID,
+            itemCreatedAt: itemCreatedAt,
+            tagID: tagID,
+            tagCreatedAt: tagCreatedAt
+        )
+
+        do {
+            let store = try ShoppingStore(
+                deviceID: "migration-device",
+                storeURL: storeURL
+            )
+            XCTAssertEqual(store.item(id: itemID)?.updatedAt, itemCreatedAt)
+            XCTAssertEqual(store.item(id: itemID)?.lastEditorDeviceID, "migration-device")
+            XCTAssertEqual(store.tag(id: tagID)?.updatedAt, tagCreatedAt)
+            XCTAssertEqual(store.tag(id: tagID)?.lastEditorDeviceID, "migration-device")
+        }
+
+        let reopened = try ShoppingStore(
+            deviceID: "different-device",
+            storeURL: storeURL
+        )
+        XCTAssertEqual(reopened.item(id: itemID)?.updatedAt, itemCreatedAt)
+        XCTAssertEqual(reopened.item(id: itemID)?.lastEditorDeviceID, "migration-device")
+        XCTAssertEqual(reopened.tag(id: tagID)?.updatedAt, tagCreatedAt)
+        XCTAssertEqual(reopened.tag(id: tagID)?.lastEditorDeviceID, "migration-device")
+    }
+
+    func testShoppingStoreErrorsUseLocalizedFormattingEntryPoints() {
+        let detail = "disk full"
+
+        XCTAssertEqual(
+            ShoppingStoreError.saveFailed(detail).errorDescription,
+            ShopStrings.shoppingStoreSaveFailed(detail)
+        )
+        XCTAssertTrue(ShopStrings.shoppingStoreSaveFailed(detail).contains(detail))
+        XCTAssertTrue(
+            ShopStrings.shoppingStoreSaveFailed(detail, language: "en")
+                .contains("Unable to save shopping data")
+        )
+        XCTAssertTrue(
+            ShopStrings.shoppingStoreSaveFailed(detail, language: "zh-Hans")
+                .contains("保存购物数据失败")
+        )
+    }
+
+    private func seedLegacySentinelRecords(
+        storeURL: URL,
+        itemID: UUID,
+        itemCreatedAt: Date,
+        tagID: UUID,
+        tagCreatedAt: Date
+    ) throws {
+        let schema = Schema([ShoppingItem.self, Tag.self])
+        let configuration = ModelConfiguration(schema: schema, url: storeURL)
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [configuration]
+        )
+        let context = container.mainContext
+        context.insert(
+            ShoppingItem(
+                id: itemID,
+                name: "Legacy item",
+                createdAt: itemCreatedAt,
+                updatedAt: Date(timeIntervalSince1970: 0),
+                lastEditorDeviceID: ""
+            )
+        )
+        context.insert(
+            Tag(
+                id: tagID,
+                name: "Legacy tag",
+                createdAt: tagCreatedAt,
+                updatedAt: Date(timeIntervalSince1970: 0),
+                lastEditorDeviceID: ""
+            )
+        )
+        try context.save()
     }
 }

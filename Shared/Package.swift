@@ -18,7 +18,8 @@ let package = Package(
     targets: [
         .target(
             name: "ShopCore",
-            path: "Sources/ShopCore"
+            path: "Sources/ShopCore",
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "ShopCoreTests",

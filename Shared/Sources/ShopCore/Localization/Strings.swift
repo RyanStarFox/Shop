@@ -152,6 +152,54 @@ public enum ShopStrings {
         NSLocalizedString("webdav.not_configured", comment: "Not configured")
     }
 
+    // MARK: - Shopping Store Errors
+    public static func shoppingStoreContainerCreationFailed(
+        _ detail: String,
+        language: String? = nil
+    ) -> String {
+        localizedFormat(
+            "error.store.container_creation_failed",
+            detail,
+            language: language
+        )
+    }
+
+    public static func shoppingStoreFetchFailed(
+        _ detail: String,
+        language: String? = nil
+    ) -> String {
+        localizedFormat("error.store.fetch_failed", detail, language: language)
+    }
+
+    public static func shoppingStoreSaveFailed(
+        _ detail: String,
+        language: String? = nil
+    ) -> String {
+        localizedFormat("error.store.save_failed", detail, language: language)
+    }
+
+    public static func shoppingStoreItemNotFound(
+        _ id: UUID,
+        language: String? = nil
+    ) -> String {
+        localizedFormat(
+            "error.store.item_not_found",
+            id.uuidString,
+            language: language
+        )
+    }
+
+    public static func shoppingStoreTagNotFound(
+        _ id: UUID,
+        language: String? = nil
+    ) -> String {
+        localizedFormat(
+            "error.store.tag_not_found",
+            id.uuidString,
+            language: language
+        )
+    }
+
     // MARK: - Helper
     public static func relativeTime(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
@@ -159,5 +207,32 @@ public enum ShopStrings {
         if interval < 3600 { return String(format: minutesAgo, Int(interval / 60)) }
         if interval < 86400 { return String(format: hoursAgo, Int(interval / 3600)) }
         return String(format: daysAgo, Int(interval / 86400))
+    }
+
+    private static func localizedFormat(
+        _ key: String,
+        _ argument: String,
+        language: String?
+    ) -> String {
+        let bundle = localizationBundle(language: language)
+        let template = bundle.localizedString(
+            forKey: key,
+            value: key,
+            table: nil
+        )
+        let locale = language.map(Locale.init(identifier:)) ?? .current
+        return String(format: template, locale: locale, argument)
+    }
+
+    private static func localizationBundle(language: String?) -> Bundle {
+        guard let language,
+              let path = Bundle.module.path(
+                forResource: language,
+                ofType: "lproj"
+              ),
+              let bundle = Bundle(path: path) else {
+            return .module
+        }
+        return bundle
     }
 }

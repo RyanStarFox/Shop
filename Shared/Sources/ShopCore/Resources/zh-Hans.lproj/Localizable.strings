@@ -1,0 +1,6 @@
+/* Shopping store errors */
+"error.store.container_creation_failed" = "创建购物数据存储失败：%@";
+"error.store.fetch_failed" = "读取购物数据失败：%@";
+"error.store.save_failed" = "保存购物数据失败：%@";
+"error.store.item_not_found" = "未找到购物物品 %@。";
+"error.store.tag_not_found" = "未找到标签 %@。";
