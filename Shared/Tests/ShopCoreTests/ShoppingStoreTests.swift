@@ -145,12 +145,14 @@ final class ShoppingStoreTests: XCTestCase {
         XCTAssertEqual(item.updatedAt, creationDate)
         XCTAssertNil(item.deletedAt)
         XCTAssertEqual(item.lastEditorDeviceID, "")
+        XCTAssertEqual(item.recordSchemaVersion, 2)
         XCTAssertEqual(tag.updatedAt, creationDate)
         XCTAssertNil(tag.deletedAt)
         XCTAssertEqual(tag.lastEditorDeviceID, "")
+        XCTAssertEqual(tag.recordSchemaVersion, 2)
     }
 
-    func testOpeningDiskStoreBackfillsLegacyVersionSentinelsOnlyOnce() throws {
+    func testOpeningDiskStoreMigratesByRecordVersionAndIsIdempotent() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(
@@ -159,17 +161,18 @@ final class ShoppingStoreTests: XCTestCase {
         )
         defer { try? FileManager.default.removeItem(at: directory) }
         let storeURL = directory.appendingPathComponent("shop.store")
-        let itemID = UUID()
-        let tagID = UUID()
-        let itemCreatedAt = Date(timeIntervalSince1970: 100)
-        let tagCreatedAt = Date(timeIntervalSince1970: 200)
+        let legacyItemID = UUID()
+        let legacyTagID = UUID()
+        let currentItemID = UUID()
+        let currentTagID = UUID()
+        let epoch = Date(timeIntervalSince1970: 0)
 
-        try seedLegacySentinelRecords(
+        try seedVersionMigrationRecords(
             storeURL: storeURL,
-            itemID: itemID,
-            itemCreatedAt: itemCreatedAt,
-            tagID: tagID,
-            tagCreatedAt: tagCreatedAt
+            legacyItemID: legacyItemID,
+            legacyTagID: legacyTagID,
+            currentItemID: currentItemID,
+            currentTagID: currentTagID
         )
 
         do {
@@ -177,20 +180,48 @@ final class ShoppingStoreTests: XCTestCase {
                 deviceID: "migration-device",
                 storeURL: storeURL
             )
-            XCTAssertEqual(store.item(id: itemID)?.updatedAt, itemCreatedAt)
-            XCTAssertEqual(store.item(id: itemID)?.lastEditorDeviceID, "migration-device")
-            XCTAssertEqual(store.tag(id: tagID)?.updatedAt, tagCreatedAt)
-            XCTAssertEqual(store.tag(id: tagID)?.lastEditorDeviceID, "migration-device")
+            XCTAssertEqual(store.item(id: legacyItemID)?.updatedAt, epoch)
+            XCTAssertEqual(
+                store.item(id: legacyItemID)?.lastEditorDeviceID,
+                "migration-device"
+            )
+            XCTAssertEqual(store.item(id: legacyItemID)?.recordSchemaVersion, 2)
+            XCTAssertEqual(store.tag(id: legacyTagID)?.updatedAt, epoch)
+            XCTAssertEqual(
+                store.tag(id: legacyTagID)?.lastEditorDeviceID,
+                "migration-device"
+            )
+            XCTAssertEqual(store.tag(id: legacyTagID)?.recordSchemaVersion, 2)
+            XCTAssertEqual(store.item(id: currentItemID)?.updatedAt, epoch)
+            XCTAssertEqual(store.item(id: currentItemID)?.lastEditorDeviceID, "original")
+            XCTAssertEqual(store.item(id: currentItemID)?.recordSchemaVersion, 2)
+            XCTAssertEqual(store.tag(id: currentTagID)?.updatedAt, epoch)
+            XCTAssertEqual(store.tag(id: currentTagID)?.lastEditorDeviceID, "original")
+            XCTAssertEqual(store.tag(id: currentTagID)?.recordSchemaVersion, 2)
         }
 
         let reopened = try ShoppingStore(
             deviceID: "different-device",
             storeURL: storeURL
         )
-        XCTAssertEqual(reopened.item(id: itemID)?.updatedAt, itemCreatedAt)
-        XCTAssertEqual(reopened.item(id: itemID)?.lastEditorDeviceID, "migration-device")
-        XCTAssertEqual(reopened.tag(id: tagID)?.updatedAt, tagCreatedAt)
-        XCTAssertEqual(reopened.tag(id: tagID)?.lastEditorDeviceID, "migration-device")
+        XCTAssertEqual(reopened.item(id: legacyItemID)?.updatedAt, epoch)
+        XCTAssertEqual(
+            reopened.item(id: legacyItemID)?.lastEditorDeviceID,
+            "migration-device"
+        )
+        XCTAssertEqual(reopened.item(id: legacyItemID)?.recordSchemaVersion, 2)
+        XCTAssertEqual(reopened.tag(id: legacyTagID)?.updatedAt, epoch)
+        XCTAssertEqual(
+            reopened.tag(id: legacyTagID)?.lastEditorDeviceID,
+            "migration-device"
+        )
+        XCTAssertEqual(reopened.tag(id: legacyTagID)?.recordSchemaVersion, 2)
+        XCTAssertEqual(reopened.item(id: currentItemID)?.updatedAt, epoch)
+        XCTAssertEqual(reopened.item(id: currentItemID)?.lastEditorDeviceID, "original")
+        XCTAssertEqual(reopened.item(id: currentItemID)?.recordSchemaVersion, 2)
+        XCTAssertEqual(reopened.tag(id: currentTagID)?.updatedAt, epoch)
+        XCTAssertEqual(reopened.tag(id: currentTagID)?.lastEditorDeviceID, "original")
+        XCTAssertEqual(reopened.tag(id: currentTagID)?.recordSchemaVersion, 2)
     }
 
     func testShoppingStoreErrorsUseLocalizedFormattingEntryPoints() {
@@ -211,12 +242,12 @@ final class ShoppingStoreTests: XCTestCase {
         )
     }
 
-    private func seedLegacySentinelRecords(
+    private func seedVersionMigrationRecords(
         storeURL: URL,
-        itemID: UUID,
-        itemCreatedAt: Date,
-        tagID: UUID,
-        tagCreatedAt: Date
+        legacyItemID: UUID,
+        legacyTagID: UUID,
+        currentItemID: UUID,
+        currentTagID: UUID
     ) throws {
         let schema = Schema([ShoppingItem.self, Tag.self])
         let configuration = ModelConfiguration(schema: schema, url: storeURL)
@@ -227,20 +258,42 @@ final class ShoppingStoreTests: XCTestCase {
         let context = container.mainContext
         context.insert(
             ShoppingItem(
-                id: itemID,
+                id: legacyItemID,
                 name: "Legacy item",
-                createdAt: itemCreatedAt,
+                createdAt: Date(timeIntervalSince1970: 0),
                 updatedAt: Date(timeIntervalSince1970: 0),
-                lastEditorDeviceID: ""
+                lastEditorDeviceID: "",
+                recordSchemaVersion: 0
             )
         )
         context.insert(
             Tag(
-                id: tagID,
+                id: legacyTagID,
                 name: "Legacy tag",
-                createdAt: tagCreatedAt,
+                createdAt: Date(timeIntervalSince1970: 0),
                 updatedAt: Date(timeIntervalSince1970: 0),
-                lastEditorDeviceID: ""
+                lastEditorDeviceID: "",
+                recordSchemaVersion: 0
+            )
+        )
+        context.insert(
+            ShoppingItem(
+                id: currentItemID,
+                name: "Current epoch item",
+                createdAt: Date(timeIntervalSince1970: 100),
+                updatedAt: Date(timeIntervalSince1970: 0),
+                lastEditorDeviceID: "original",
+                recordSchemaVersion: 2
+            )
+        )
+        context.insert(
+            Tag(
+                id: currentTagID,
+                name: "Current epoch tag",
+                createdAt: Date(timeIntervalSince1970: 200),
+                updatedAt: Date(timeIntervalSince1970: 0),
+                lastEditorDeviceID: "original",
+                recordSchemaVersion: 2
             )
         )
         try context.save()

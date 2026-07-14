@@ -10,6 +10,7 @@ public final class Tag: Identifiable, Hashable {
     public var updatedAt: Date = Date(timeIntervalSince1970: 0)
     public var deletedAt: Date? = nil
     public var lastEditorDeviceID: String = ""
+    public var recordSchemaVersion: Int = 0
 
     public init(
         id: UUID = UUID(),
@@ -18,7 +19,8 @@ public final class Tag: Identifiable, Hashable {
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
-        lastEditorDeviceID: String = ""
+        lastEditorDeviceID: String = "",
+        recordSchemaVersion: Int = 2
     ) {
         self.id = id
         self.name = name
@@ -27,6 +29,7 @@ public final class Tag: Identifiable, Hashable {
         self.updatedAt = updatedAt ?? createdAt
         self.deletedAt = deletedAt
         self.lastEditorDeviceID = lastEditorDeviceID
+        self.recordSchemaVersion = recordSchemaVersion
     }
 
     public var color: PlatformColor {

@@ -12,6 +12,7 @@ public final class ShoppingItem: Identifiable, Hashable {
     public var updatedAt: Date = Date(timeIntervalSince1970: 0)
     public var deletedAt: Date? = nil
     public var lastEditorDeviceID: String = ""
+    public var recordSchemaVersion: Int = 0
     @Relationship(deleteRule: .nullify) public var tags: [Tag]
 
     public init(
@@ -24,6 +25,7 @@ public final class ShoppingItem: Identifiable, Hashable {
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
         lastEditorDeviceID: String = "",
+        recordSchemaVersion: Int = 2,
         tags: [Tag] = []
     ) {
         self.id = id
@@ -35,6 +37,7 @@ public final class ShoppingItem: Identifiable, Hashable {
         self.updatedAt = updatedAt ?? createdAt
         self.deletedAt = deletedAt
         self.lastEditorDeviceID = lastEditorDeviceID
+        self.recordSchemaVersion = recordSchemaVersion
         self.tags = tags
     }
 }

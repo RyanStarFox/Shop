@@ -26,6 +26,8 @@ public enum ShoppingStoreError: Error, Equatable, LocalizedError {
 
 @MainActor
 public final class ShoppingStore {
+    private static let currentRecordSchemaVersion = 2
+
     public let modelContainer: ModelContainer
     public let modelContext: ModelContext
     public let deviceID: String
@@ -408,20 +410,30 @@ public final class ShoppingStore {
     }
 
     private func backfillLegacyVersions() throws {
-        let sentinel = Date(timeIntervalSince1970: 0)
-        let legacyItems = storedItems.filter { $0.updatedAt == sentinel }
-        let legacyTags = storedTags.filter { $0.updatedAt == sentinel }
+        let currentVersion = Self.currentRecordSchemaVersion
+        let legacyItems = storedItems.filter {
+            $0.recordSchemaVersion < currentVersion
+        }
+        let legacyTags = storedTags.filter {
+            $0.recordSchemaVersion < currentVersion
+        }
         guard !legacyItems.isEmpty || !legacyTags.isEmpty else {
             return
         }
 
         for item in legacyItems {
             item.updatedAt = item.createdAt
-            item.lastEditorDeviceID = deviceID
+            if item.lastEditorDeviceID.isEmpty {
+                item.lastEditorDeviceID = deviceID
+            }
+            item.recordSchemaVersion = currentVersion
         }
         for tag in legacyTags {
             tag.updatedAt = tag.createdAt
-            tag.lastEditorDeviceID = deviceID
+            if tag.lastEditorDeviceID.isEmpty {
+                tag.lastEditorDeviceID = deviceID
+            }
+            tag.recordSchemaVersion = currentVersion
         }
 
         do {
