@@ -4,34 +4,43 @@ import Foundation
 @MainActor
 public final class WebDAVSyncService: ObservableObject {
     @Published public var isConfigured = false
-    @Published public var isSyncing = false
-    @Published public var lastSyncDate: Date?
-    @Published public var error: String?
+    @Published public private(set) var configurationError: String?
+
+    public var isSyncing: Bool { coordinator?.status.isSyncing ?? false }
+    public var lastSyncDate: Date? { coordinator?.status.lastSuccess }
+    public var error: String? { configurationError ?? coordinator?.status.failureMessage }
 
     private let keychain: KeychainStore
     private let now: () -> Date
     private var transport: (any WebDAVTransporting)?
-    private var dataStore: DataStore?
+    private var coordinator: SyncCoordinator?
 
     public init(
         keychain: KeychainStore = KeychainStore(),
         transport: (any WebDAVTransporting)? = nil,
+        coordinator: SyncCoordinator? = nil,
         now: @escaping () -> Date = Date.init
     ) {
         self.keychain = keychain
         self.transport = transport
+        self.coordinator = coordinator
         self.now = now
         isConfigured = transport != nil
+        coordinator?.configure(transport: transport)
     }
 
     public func configure(with dataStore: DataStore) {
-        self.dataStore = dataStore
+        if coordinator == nil {
+            coordinator = SyncCoordinator(dataStore: dataStore, transport: transport, now: now)
+        }
     }
 
     public func saveCredentials(serverURL: String, username: String, password: String) throws {
         guard !serverURL.isEmpty, !username.isEmpty else {
+            transport = nil
+            coordinator?.configure(transport: nil)
             isConfigured = false
-            error = ShopStrings.webdavNotConfigured
+            configurationError = ShopStrings.webdavNotConfigured
             return
         }
 
@@ -41,35 +50,41 @@ public final class WebDAVSyncService: ObservableObject {
             }
             guard let storedPassword = try keychain.password(username: username, serverURL: serverURL) else {
                 transport = nil
+                coordinator?.configure(transport: nil)
                 isConfigured = false
-                error = ShopStrings.webdavNotConfigured
+                configurationError = ShopStrings.webdavNotConfigured
                 return
             }
             try configureTransport(serverURL: serverURL, username: username, password: storedPassword)
         } catch {
             transport = nil
+            coordinator?.configure(transport: nil)
             isConfigured = false
-            self.error = localizedMessage(for: error)
+            configurationError = localizedMessage(for: error)
             throw error
         }
     }
 
     public func restoreCredentials(serverURL: String, username: String) {
         guard !serverURL.isEmpty, !username.isEmpty else {
+            transport = nil
+            coordinator?.configure(transport: nil)
             isConfigured = false
             return
         }
         do {
             guard let password = try keychain.password(username: username, serverURL: serverURL) else {
                 transport = nil
+                coordinator?.configure(transport: nil)
                 isConfigured = false
                 return
             }
             try configureTransport(serverURL: serverURL, username: username, password: password)
         } catch {
             transport = nil
+            coordinator?.configure(transport: nil)
             isConfigured = false
-            self.error = localizedMessage(for: error)
+            configurationError = localizedMessage(for: error)
         }
     }
 
@@ -89,49 +104,25 @@ public final class WebDAVSyncService: ObservableObject {
             defaults.removeObject(forKey: "webdav_password")
             try configureTransport(serverURL: serverURL, username: username, password: legacyPassword)
         } catch {
-            self.error = localizedMessage(for: error)
+            configurationError = localizedMessage(for: error)
         }
     }
 
     public func clearCredentials(serverURL: String, username: String) throws {
         try keychain.deletePassword(username: username, serverURL: serverURL)
         transport = nil
+        coordinator?.configure(transport: nil)
         isConfigured = false
-        error = nil
+        configurationError = nil
     }
 
     public func syncNow() async {
-        guard let transport, let dataStore else {
-            error = ShopStrings.webdavNotConfigured
+        guard let coordinator else {
+            configurationError = ShopStrings.webdavNotConfigured
             return
         }
-
-        isSyncing = true
-        error = nil
-        defer { isSyncing = false }
-
-        do {
-            let remote = try await transport.fetch()
-            if let remote {
-                try dataStore.shoppingStore.apply(snapshot: remote.snapshot)
-                dataStore.fetchData()
-            }
-
-            let mergedSnapshot = try dataStore.shoppingStore.makeSnapshot(now: now())
-            let precondition: WebDAVPrecondition
-            if let remote {
-                guard let etag = remote.etag else {
-                    throw WebDAVError.invalidResponse
-                }
-                precondition = .etag(etag)
-            } else {
-                precondition = .create
-            }
-            _ = try await transport.put(mergedSnapshot, precondition: precondition)
-            lastSyncDate = now()
-        } catch {
-            self.error = localizedMessage(for: error)
-        }
+        configurationError = nil
+        await coordinator.syncNow()
     }
 
     public func autoSync() async {
@@ -144,25 +135,23 @@ public final class WebDAVSyncService: ObservableObject {
             username: username,
             password: password
         )
+        coordinator?.configure(transport: transport)
         isConfigured = true
-        error = nil
+        configurationError = nil
     }
 
     private func localizedMessage(for error: Error) -> String {
-        guard let error = error as? WebDAVError else {
-            return ShopStrings.webdavSyncFailed
-        }
-        switch error {
+        switch error as? WebDAVError {
         case .unauthorized:
-            return ShopStrings.webdavUnauthorized
+            ShopStrings.webdavUnauthorized
         case .preconditionFailed:
-            return ShopStrings.webdavPreconditionFailed
+            ShopStrings.webdavPreconditionFailed
         case .network:
-            return ShopStrings.webdavNetworkFailed
+            ShopStrings.webdavNetworkFailed
         case .invalidURL, .insecureURL:
-            return ShopStrings.webdavInvalidServer
-        case .notFound, .invalidResponse, .decoding:
-            return ShopStrings.webdavSyncFailed
+            ShopStrings.webdavInvalidServer
+        case .notFound, .invalidResponse, .decoding, .none:
+            ShopStrings.webdavSyncFailed
         }
     }
 }

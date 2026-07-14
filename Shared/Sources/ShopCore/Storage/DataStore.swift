@@ -16,6 +16,7 @@ public final class DataStore: ObservableObject {
     @Published public var selectedFilter: FilterOption = .all
     @Published public var selectedTags: Set<UUID> = []
     @Published public var dateRange: ClosedRange<Date>?
+    var onSuccessfulLocalMutation: (() -> Void)?
 
     public enum FilterOption: String, CaseIterable {
         case all
@@ -200,6 +201,7 @@ public final class DataStore: ObservableObject {
         do {
             try mutation()
             lastError = nil
+            onSuccessfulLocalMutation?()
         } catch let error as ShoppingStoreError {
             lastError = error
         } catch {

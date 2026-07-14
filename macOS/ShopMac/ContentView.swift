@@ -4,6 +4,7 @@ import ShopCore
 struct MacContentView: View {
     @EnvironmentObject var dataStore: DataStore
     @EnvironmentObject var webdavSync: WebDAVSyncService
+    @EnvironmentObject var syncCoordinator: SyncCoordinator
     @State private var newItemName = ""
     @State private var selectedFilter = DataStore.FilterOption.all
     @State private var selectedItem: ShoppingItem? = nil
@@ -145,7 +146,7 @@ struct MacContentView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                if webdavSync.isSyncing {
+                if syncCoordinator.status.isSyncing {
                     ProgressView()
                         .scaleEffect(0.6)
                         .frame(width: 16, height: 16)
@@ -195,13 +196,13 @@ struct MacContentView: View {
 
             if webdavSync.isConfigured {
                 Button {
-                    Task { await webdavSync.syncNow() }
+                    Task { await syncCoordinator.syncNow() }
                 } label: {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.caption)
                 }
                 .buttonStyle(.plain)
-                .disabled(webdavSync.isSyncing)
+                .disabled(syncCoordinator.status.isSyncing)
             }
         }
     }

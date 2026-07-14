@@ -4,6 +4,7 @@ import ShopCore
 struct MacSettingsView: View {
     @EnvironmentObject var dataStore: DataStore
     @EnvironmentObject var webdavSync: WebDAVSyncService
+    @EnvironmentObject var syncCoordinator: SyncCoordinator
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
@@ -17,9 +18,9 @@ struct MacSettingsView: View {
                 username: $webdavUsername,
                 password: $webdavPassword,
                 isConfigured: webdavSync.isConfigured,
-                isSyncing: webdavSync.isSyncing,
-                lastSync: webdavSync.lastSyncDate,
-                error: webdavSync.error,
+                isSyncing: syncCoordinator.status.isSyncing,
+                lastSync: syncCoordinator.status.lastSuccess,
+                error: syncCoordinator.status.failureMessage ?? webdavSync.error,
                 onSync: {
                     webdavSyncTask = Task {
                         do {
@@ -29,7 +30,7 @@ struct MacSettingsView: View {
                                 password: webdavPassword
                             )
                             webdavPassword = ""
-                            await webdavSync.syncNow()
+                            await syncCoordinator.syncNow()
                         } catch {
                             // The service exposes the localized error without revealing credentials.
                         }

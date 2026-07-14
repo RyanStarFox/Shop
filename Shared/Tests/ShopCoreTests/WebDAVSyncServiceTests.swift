@@ -57,7 +57,7 @@ final class WebDAVSyncServiceTests: XCTestCase {
         XCTAssertEqual(service.error, ShopStrings.webdavPreconditionFailed)
         XCTAssertNil(service.lastSyncDate)
         XCTAssertFalse(service.isSyncing)
-        XCTAssertEqual(transport.putPreconditions, [.create])
+        XCTAssertEqual(transport.putPreconditions, [.create, .create, .create])
     }
 }
 

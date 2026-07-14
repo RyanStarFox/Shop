@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject var dataStore: DataStore
     @EnvironmentObject var wifiSync: WiFiSyncService
     @EnvironmentObject var webdavSync: WebDAVSyncService
+    @EnvironmentObject var syncCoordinator: SyncCoordinator
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
 
@@ -123,7 +124,7 @@ struct SettingsView: View {
                                                 password: webdavPassword
                                             )
                                             webdavPassword = ""
-                                            await webdavSync.syncNow()
+                                            await syncCoordinator.syncNow()
                                         } catch {
                                             // The service exposes the localized error without revealing credentials.
                                         }
@@ -132,17 +133,17 @@ struct SettingsView: View {
                                 .disabled(
                                     webdavServer.isEmpty
                                         || webdavUsername.isEmpty
-                                        || webdavSync.isSyncing
+                                        || syncCoordinator.status.isSyncing
                                 )
 
-                                if webdavSync.isSyncing {
+                                if syncCoordinator.status.isSyncing {
                                     ProgressView(ShopStrings.syncing)
                                         .font(.caption)
-                                } else if let error = webdavSync.error {
+                                } else if let error = syncCoordinator.status.failureMessage ?? webdavSync.error {
                                     Text(error)
                                         .font(.caption)
                                         .foregroundStyle(.red)
-                                } else if let lastSync = webdavSync.lastSyncDate {
+                                } else if let lastSync = syncCoordinator.status.lastSuccess {
                                     Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)

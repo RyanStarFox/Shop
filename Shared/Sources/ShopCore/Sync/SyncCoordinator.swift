@@ -1,0 +1,186 @@
+import Combine
+import Foundation
+
+public enum SyncStatus: Equatable, Sendable {
+    case idle(lastSuccess: Date?)
+    case syncing
+    case failed(message: String, canRetry: Bool)
+
+    public var isSyncing: Bool {
+        self == .syncing
+    }
+
+    public var lastSuccess: Date? {
+        guard case let .idle(lastSuccess) = self else { return nil }
+        return lastSuccess
+    }
+
+    public var failureMessage: String? {
+        guard case let .failed(message, _) = self else { return nil }
+        return message
+    }
+}
+
+@MainActor
+public final class SyncCoordinator: ObservableObject {
+    public typealias Sleep = @Sendable (TimeInterval) async -> Void
+
+    @Published public private(set) var status: SyncStatus
+
+    public var lastSuccess: Date? {
+        status.lastSuccess
+    }
+
+    private let dataStore: DataStore
+    private let now: () -> Date
+    private let sleep: Sleep
+    private var transport: (any WebDAVTransporting)?
+    private var debounceTask: Task<Void, Never>?
+    private var syncTask: Task<Void, Never>?
+    private var debounceGeneration = 0
+    private var needsAnotherPass = false
+
+    public init(
+        dataStore: DataStore,
+        transport: (any WebDAVTransporting)? = nil,
+        now: @escaping () -> Date = Date.init,
+        sleep: @escaping Sleep = SyncCoordinator.sleepForDebounce
+    ) {
+        self.dataStore = dataStore
+        self.transport = transport
+        self.now = now
+        self.sleep = sleep
+        status = .idle(lastSuccess: nil)
+        dataStore.onSuccessfulLocalMutation = { [weak self] in
+            self?.scheduleSync()
+        }
+    }
+
+    public func configure(transport: (any WebDAVTransporting)?) {
+        self.transport = transport
+    }
+
+    public func scheduleSync() {
+        if syncTask != nil {
+            needsAnotherPass = true
+            return
+        }
+
+        debounceTask?.cancel()
+        debounceGeneration += 1
+        let generation = debounceGeneration
+        debounceTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.sleep(2)
+            guard !Task.isCancelled, generation == self.debounceGeneration else { return }
+            self.debounceTask = nil
+            await self.syncNow()
+        }
+    }
+
+    public func syncNow() async {
+        if let debounceTask {
+            debounceGeneration += 1
+            debounceTask.cancel()
+            self.debounceTask = nil
+            await debounceTask.value
+        }
+
+        if let syncTask {
+            needsAnotherPass = true
+            await syncTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.runSyncPasses()
+        }
+        syncTask = task
+        await task.value
+    }
+
+    private func runSyncPasses() async {
+        defer { syncTask = nil }
+        repeat {
+            needsAnotherPass = false
+            await syncOnce()
+        } while needsAnotherPass
+    }
+
+    private func syncOnce() async {
+        guard let transport else {
+            status = .failed(message: ShopStrings.webdavNotConfigured, canRetry: false)
+            return
+        }
+
+        status = .syncing
+        do {
+            for attempt in 0..<3 {
+                let remote = try await transport.fetch()
+                let snapshot = try mergedSnapshot(with: remote)
+                let precondition = try precondition(for: remote)
+                do {
+                    _ = try await transport.put(snapshot, precondition: precondition)
+                    status = .idle(lastSuccess: now())
+                    return
+                } catch WebDAVError.preconditionFailed where attempt < 2 {
+                    continue
+                }
+            }
+            status = .failed(
+                message: ShopStrings.webdavPreconditionFailed,
+                canRetry: true
+            )
+        } catch {
+            status = .failed(message: localizedMessage(for: error), canRetry: isRetryable(error))
+        }
+    }
+
+    private func mergedSnapshot(with remote: RemoteSnapshot?) throws -> SyncSnapshot {
+        guard let remote else {
+            return try dataStore.shoppingStore.makeSnapshot(now: now())
+        }
+        let local = try dataStore.shoppingStore.makeSnapshot(now: now())
+        let merged = SnapshotMerger().merge(local: local, remote: remote.snapshot)
+        try dataStore.shoppingStore.apply(snapshot: merged)
+        dataStore.fetchData()
+        return try dataStore.shoppingStore.makeSnapshot(now: now())
+    }
+
+    private func precondition(for remote: RemoteSnapshot?) throws -> WebDAVPrecondition {
+        guard let remote else {
+            return .create
+        }
+        guard let etag = remote.etag else {
+            throw WebDAVError.invalidResponse
+        }
+        return .etag(etag)
+    }
+
+    private func localizedMessage(for error: Error) -> String {
+        guard let error = error as? WebDAVError else {
+            return ShopStrings.webdavSyncFailed
+        }
+        switch error {
+        case .unauthorized:
+            return ShopStrings.webdavUnauthorized
+        case .preconditionFailed:
+            return ShopStrings.webdavPreconditionFailed
+        case .network:
+            return ShopStrings.webdavNetworkFailed
+        case .invalidURL, .insecureURL:
+            return ShopStrings.webdavInvalidServer
+        case .notFound, .invalidResponse, .decoding:
+            return ShopStrings.webdavSyncFailed
+        }
+    }
+
+    private func isRetryable(_ error: Error) -> Bool {
+        (error as? WebDAVError)?.isRecoverable ?? true
+    }
+
+    public static func sleepForDebounce(_ interval: TimeInterval) async {
+        try? await Task.sleep(for: .seconds(interval))
+    }
+}
