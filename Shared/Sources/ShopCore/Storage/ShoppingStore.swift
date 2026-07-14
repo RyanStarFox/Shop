@@ -364,22 +364,108 @@ public final class ShoppingStore {
         }
     }
 
-    public func apply(snapshot: ExportData) throws {
+    public func makeSnapshot(now: Date = Date()) throws -> SyncSnapshot {
+        SyncSnapshot(
+            version: SyncSnapshot.currentVersion,
+            generatedAt: now,
+            items: allItems
+                .map { item in
+                    ItemSnapshot(
+                        id: item.id,
+                        name: item.name,
+                        isCompleted: item.isCompleted,
+                        createdAt: item.createdAt,
+                        completedAt: item.completedAt,
+                        updatedAt: item.updatedAt,
+                        deletedAt: item.deletedAt,
+                        sortOrder: item.sortOrder,
+                        tagIDs: item.tags.map(\.id).sorted { $0.uuidString < $1.uuidString },
+                        lastEditorDeviceID: item.lastEditorDeviceID
+                    )
+                }
+                .sorted { $0.id.uuidString < $1.id.uuidString },
+            tags: allTags
+                .map { tag in
+                    TagSnapshot(
+                        id: tag.id,
+                        name: tag.name,
+                        colorHex: tag.colorHex,
+                        createdAt: tag.createdAt,
+                        updatedAt: tag.updatedAt,
+                        deletedAt: tag.deletedAt,
+                        lastEditorDeviceID: tag.lastEditorDeviceID
+                    )
+                }
+                .sorted { $0.id.uuidString < $1.id.uuidString }
+        )
+    }
+
+    public func apply(snapshot: SyncSnapshot) throws {
         var insertedTags: [Tag] = []
-        for exportedTag in snapshot.tags where tag(id: exportedTag.id) == nil {
-            let tag = exportedTag.toTag()
-            modelContext.insert(tag)
-            insertedTags.append(tag)
+        for tagSnapshot in snapshot.tags {
+            let tag = tag(id: tagSnapshot.id) ?? {
+                let newTag = Tag(
+                    id: tagSnapshot.id,
+                    name: tagSnapshot.name,
+                    colorHex: tagSnapshot.colorHex,
+                    createdAt: tagSnapshot.createdAt,
+                    updatedAt: tagSnapshot.updatedAt,
+                    deletedAt: tagSnapshot.deletedAt,
+                    lastEditorDeviceID: tagSnapshot.lastEditorDeviceID,
+                    recordSchemaVersion: Self.currentRecordSchemaVersion
+                )
+                modelContext.insert(newTag)
+                insertedTags.append(newTag)
+                return newTag
+            }()
+            tag.name = tagSnapshot.name
+            tag.colorHex = tagSnapshot.colorHex
+            tag.createdAt = tagSnapshot.createdAt
+            tag.updatedAt = tagSnapshot.updatedAt
+            tag.deletedAt = tagSnapshot.deletedAt
+            tag.lastEditorDeviceID = tagSnapshot.lastEditorDeviceID
+            tag.recordSchemaVersion = Self.currentRecordSchemaVersion
         }
 
-        let availableTags = storedTags + insertedTags
+        let canonicalTags = Dictionary(
+            uniqueKeysWithValues: (storedTags + insertedTags).map { ($0.id, $0) }
+        )
         var insertedItems: [ShoppingItem] = []
-        for exportedItem in snapshot.items where item(id: exportedItem.id) == nil {
-            let item = exportedItem.toItem()
-            let tagIDs = Set(exportedItem.tagIds)
-            item.tags = availableTags.filter { tagIDs.contains($0.id) }
-            modelContext.insert(item)
-            insertedItems.append(item)
+        for itemSnapshot in snapshot.items {
+            let item = item(id: itemSnapshot.id) ?? {
+                let newItem = ShoppingItem(
+                    id: itemSnapshot.id,
+                    name: itemSnapshot.name,
+                    isCompleted: itemSnapshot.isCompleted,
+                    createdAt: itemSnapshot.createdAt,
+                    completedAt: itemSnapshot.completedAt,
+                    sortOrder: itemSnapshot.sortOrder,
+                    updatedAt: itemSnapshot.updatedAt,
+                    deletedAt: itemSnapshot.deletedAt,
+                    lastEditorDeviceID: itemSnapshot.lastEditorDeviceID,
+                    recordSchemaVersion: Self.currentRecordSchemaVersion
+                )
+                modelContext.insert(newItem)
+                insertedItems.append(newItem)
+                return newItem
+            }()
+            item.name = itemSnapshot.name
+            item.isCompleted = itemSnapshot.isCompleted
+            item.createdAt = itemSnapshot.createdAt
+            item.completedAt = itemSnapshot.completedAt
+            item.sortOrder = itemSnapshot.sortOrder
+            item.updatedAt = itemSnapshot.updatedAt
+            item.deletedAt = itemSnapshot.deletedAt
+            item.lastEditorDeviceID = itemSnapshot.lastEditorDeviceID
+            item.recordSchemaVersion = Self.currentRecordSchemaVersion
+            item.tags = Array(Set(itemSnapshot.tagIDs))
+                .sorted { $0.uuidString < $1.uuidString }
+                .compactMap { id in
+                    guard let tag = canonicalTags[id], tag.deletedAt == nil else {
+                        return nil
+                    }
+                    return tag
+                }
         }
 
         do {
@@ -390,6 +476,39 @@ public final class ShoppingStore {
             modelContext.rollback()
             throw error
         }
+    }
+
+    public func apply(snapshot: ExportData) throws {
+        let convertedSnapshot = SyncSnapshot(
+            version: 1,
+            generatedAt: Date(),
+            items: snapshot.items.map {
+                ItemSnapshot(
+                    id: $0.id,
+                    name: $0.name,
+                    isCompleted: $0.isCompleted,
+                    createdAt: $0.createdAt,
+                    completedAt: $0.completedAt,
+                    updatedAt: $0.updatedAt ?? $0.createdAt,
+                    deletedAt: $0.deletedAt,
+                    sortOrder: $0.sortOrder,
+                    tagIDs: $0.tagIds,
+                    lastEditorDeviceID: $0.lastEditorDeviceID ?? "legacy"
+                )
+            },
+            tags: snapshot.tags.map {
+                TagSnapshot(
+                    id: $0.id,
+                    name: $0.name,
+                    colorHex: $0.colorHex,
+                    createdAt: $0.createdAt,
+                    updatedAt: $0.updatedAt ?? $0.createdAt,
+                    deletedAt: $0.deletedAt,
+                    lastEditorDeviceID: $0.lastEditorDeviceID ?? "legacy"
+                )
+            }
+        )
+        try apply(snapshot: convertedSnapshot)
     }
 
     private func activeTags(ids: [UUID]) throws -> [Tag] {
