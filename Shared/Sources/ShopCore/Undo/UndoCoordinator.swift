@@ -61,8 +61,8 @@ public final class UndoCoordinator {
 
     public func undo() throws {
         guard let action = currentAction else { return }
-        dismiss()
         try performMutation(action.perform)
+        dismiss()
     }
 
     public static func defaultSleep(_ interval: TimeInterval) async {

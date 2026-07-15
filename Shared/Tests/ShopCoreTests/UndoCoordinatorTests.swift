@@ -143,6 +143,35 @@ final class UndoCoordinatorTests: XCTestCase {
         XCTAssertEqual(observerCalls, 1)
     }
 
+    func testUndoKeepsActionWhenMutationFails() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "iphone")
+        let item = try store.addItem(name: "Milk", tagIDs: [], now: .t0)
+        try store.setCompleted(itemID: item.id, completed: true, now: .t1)
+
+        let missingID = UUID()
+        let coordinator = UndoCoordinator(
+            duration: 60,
+            performMutation: { mutation in
+                try mutation()
+            }
+        )
+        coordinator.present(
+            ShoppingUndo.undoCompletion(
+                itemID: missingID,
+                previousIsCompleted: false,
+                previousCompletedAt: nil,
+                store: store,
+                now: .t2
+            )
+        )
+        let actionID = try XCTUnwrap(coordinator.currentAction?.id)
+
+        XCTAssertThrowsError(try coordinator.undo())
+
+        XCTAssertEqual(coordinator.currentAction?.id, actionID)
+        XCTAssertTrue(try XCTUnwrap(store.item(id: item.id)).isCompleted)
+    }
+
     func testPresentReplacesExistingActionAndIgnoresStaleExpiry() async {
         let scheduler = UndoTestScheduler()
         let coordinator = UndoCoordinator(sleep: scheduler.sleep)
