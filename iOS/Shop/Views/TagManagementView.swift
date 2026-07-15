@@ -7,7 +7,7 @@ struct TagManagementView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var newTagName = ""
-    @State private var newTagColor = "#007AFF"
+    @State private var newTagColor = "#E0312C"
     @State private var editingTag: Tag? = nil
     @State private var editingName = ""
     @State private var editingColor = ""
@@ -55,7 +55,7 @@ struct TagManagementView: View {
                                     columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
                                     spacing: 10
                                 ) {
-                                    ForEach(presetColors, id: \.0) { hex, color in
+                                    ForEach(presetColors.dropLast(), id: \.0) { hex, color in
                                         Button {
                                             newTagColor = hex
                                         } label: {
@@ -73,6 +73,18 @@ struct TagManagementView: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
+
+                                    ColorPicker(selection: customColorBinding(for: $newTagColor), supportsOpacity: false) {
+                                        EmptyView()
+                                    }
+                                    .labelsHidden()
+                                    .frame(width: 40, height: 40)
+                                    .overlay {
+                                        Circle()
+                                            .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [4]))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .accessibilityLabel(ShopStrings.customColor)
                                 }
 
                                 GlassButton(
@@ -145,7 +157,18 @@ struct TagManagementView: View {
         guard !name.isEmpty else { return }
         dataStore.addTag(name: name, colorHex: newTagColor)
         newTagName = ""
-        newTagColor = "#007AFF"
+        newTagColor = "#E0312C"
+    }
+
+    private func customColorBinding(for hex: Binding<String>) -> Binding<Color> {
+        Binding(
+            get: { Color(shopHex: hex.wrappedValue) ?? ShopTheme.brandRed },
+            set: { color in
+                if let value = color.shopHexString {
+                    hex.wrappedValue = value
+                }
+            }
+        )
     }
 }
 
@@ -223,7 +246,7 @@ struct TagEditRow: View {
                     columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5),
                     spacing: 6
                 ) {
-                    ForEach(presetColors, id: \.0) { hex, color in
+                    ForEach(presetColors.dropLast(), id: \.0) { hex, color in
                         Button {
                             onColorChange(hex)
                         } label: {
@@ -240,6 +263,23 @@ struct TagEditRow: View {
                         }
                         .buttonStyle(.plain)
                     }
+
+                    ColorPicker(
+                        selection: Binding(
+                            get: { Color(shopHex: tag.colorHex) ?? ShopTheme.brandRed },
+                            set: { color in
+                                if let hex = color.shopHexString {
+                                    onColorChange(hex)
+                                }
+                            }
+                        ),
+                        supportsOpacity: false
+                    ) {
+                        EmptyView()
+                    }
+                    .labelsHidden()
+                    .frame(width: 28, height: 28)
+                    .accessibilityLabel(ShopStrings.customColor)
                 }
             }
         }

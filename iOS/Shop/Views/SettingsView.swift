@@ -202,6 +202,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showTagManagement) {
                 TagManagementView()
                     .presentationCornerRadius(32)
+                    .preferredColorScheme(
+                        AppearancePreference(storageValue: appearanceMode).colorScheme
+                    )
             }
             .onDisappear {
                 webdavSyncTask?.cancel()
@@ -218,5 +221,6 @@ struct SettingsView: View {
                 )
             }
         }
+        .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
     }
 }

@@ -11,6 +11,15 @@
 "app.tagline" = "适用于 iPhone、Mac 与 Apple Watch 的购物清单";
 "app.version" = "Shop! v1.0.0";
 "item.archive_section" = "归档";
+"item.added_at" = "添加";
+"item.completed_at" = "完成";
+"sort.title" = "排序";
+"sort.manual" = "手动排序";
+"sort.created_newest" = "时间从新到旧";
+"sort.created_oldest" = "时间从旧到新";
+"sort.name_ascending" = "名称 A–Z";
+"sort.name_descending" = "名称 Z–A";
+"tag.custom_color" = "自定义";
 
 /* Shopping store errors */
 "error.store.container_creation_failed" = "创建购物数据存储失败：%@";

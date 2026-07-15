@@ -19,7 +19,8 @@ struct ItemListView: View {
             filter: dataStore.selectedFilter,
             selectedTags: dataStore.selectedTags,
             dateRange: dataStore.dateRange,
-            searchIsActive: searchIsActive
+            searchIsActive: searchIsActive,
+            sortOption: dataStore.sortOption
         )
     }
 
@@ -79,17 +80,7 @@ struct ItemListView: View {
         )
         .listRowBackground(Color.clear)
         .listRowSeparator(.visible)
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                toggleCompletion(for: item)
-            } label: {
-                Label(
-                    item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete,
-                    systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
-                )
-            }
-            .tint(ShopTheme.naturalGreen)
-        }
+        // 左滑（trailing）：完成/恢复
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button {
                 toggleCompletion(for: item)
@@ -99,9 +90,10 @@ struct ItemListView: View {
                     systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
                 )
             }
-            .tint(ShopTheme.naturalGreen)
+            .tint(ShopTheme.brandRed)
         }
-        .swipeActions(edge: .trailing) {
+        // 右滑（leading）：删除
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 deleteItem(item)
             } label: {
@@ -150,17 +142,32 @@ struct ItemRow: View {
             )
 
             Button(action: onEdit) {
-                VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
-                    Text(item.name)
-                        .font(.body)
-                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
-                        .strikethrough(item.isCompleted, color: .secondary)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .top, spacing: ShopTheme.spacingSM) {
+                    VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
+                        Text(item.name)
+                            .font(.body)
+                            .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                            .strikethrough(item.isCompleted, color: .secondary)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if !item.tags.isEmpty {
-                        TagRow(tags: item.tags)
+                        if !item.tags.isEmpty {
+                            TagRow(tags: item.tags)
+                        }
                     }
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(item.createdAt.formatted(date: .abbreviated, time: .omitted))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        if item.isCompleted, let completedAt = item.completedAt {
+                            Text(completedAt.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(dateAccessibilityLabel)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -173,13 +180,21 @@ struct ItemRow: View {
         .padding(.vertical, ShopTheme.spacingXS)
     }
 
+    private var dateAccessibilityLabel: String {
+        var parts = ["\(ShopStrings.addedAt) \(item.createdAt.formatted(date: .abbreviated, time: .omitted))"]
+        if item.isCompleted, let completedAt = item.completedAt {
+            parts.append("\(ShopStrings.completedAtLabel) \(completedAt.formatted(date: .abbreviated, time: .omitted))")
+        }
+        return parts.joined(separator: ", ")
+    }
+
     private var itemAccessibilityLabel: String {
         let status = item.isCompleted ? ShopStrings.filterCompleted : ShopStrings.filterActive
         let tagNames = item.tags.map(\.name).joined(separator: ", ")
         if tagNames.isEmpty {
-            return "\(item.name), \(status)"
+            return "\(item.name), \(status), \(dateAccessibilityLabel)"
         }
-        return "\(item.name), \(tagNames), \(status)"
+        return "\(item.name), \(tagNames), \(status), \(dateAccessibilityLabel)"
     }
 }
 
@@ -190,14 +205,14 @@ private struct CompletionControl: View {
         ZStack {
             Circle()
                 .stroke(
-                    isCompleted ? ShopTheme.naturalGreen : Color.secondary.opacity(0.35),
+                    isCompleted ? ShopTheme.brandRed : Color.secondary.opacity(0.35),
                     lineWidth: 2
                 )
                 .frame(width: 24, height: 24)
 
             if isCompleted {
                 Circle()
-                    .fill(ShopTheme.naturalGreen)
+                    .fill(ShopTheme.brandRed)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
                     .font(.caption2.weight(.bold))

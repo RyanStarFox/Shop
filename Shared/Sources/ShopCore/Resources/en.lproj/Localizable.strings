@@ -11,6 +11,15 @@
 "app.tagline" = "A shopping list for iPhone, Mac, and Apple Watch";
 "app.version" = "Shop! v1.0.0";
 "item.archive_section" = "Archive";
+"item.added_at" = "Added";
+"item.completed_at" = "Completed";
+"sort.title" = "Sort";
+"sort.manual" = "Manual order";
+"sort.created_newest" = "Newest first";
+"sort.created_oldest" = "Oldest first";
+"sort.name_ascending" = "Name A–Z";
+"sort.name_descending" = "Name Z–A";
+"tag.custom_color" = "Custom";
 
 /* Shopping store errors */
 "error.store.container_creation_failed" = "Unable to create the shopping store: %@";

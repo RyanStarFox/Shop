@@ -14,8 +14,15 @@ struct ItemEditorView: View {
 
     @State private var itemName = ""
     @State private var selectedTags: Set<UUID> = []
+    @State private var createdAt = Date()
+    @State private var completedAt = Date()
     @State private var showDiscardConfirmation = false
     @FocusState private var isNameFocused: Bool
+
+    private var editingItem: ShoppingItem? {
+        if case .edit(let item) = mode { return item }
+        return nil
+    }
 
     private var trimmedName: String {
         itemName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -31,7 +38,21 @@ struct ItemEditorView: View {
             return !trimmedName.isEmpty || !selectedTags.isEmpty
         case .edit(let item):
             let originalTags = Set(item.tags.map(\.id))
-            return trimmedName != item.name || selectedTags != originalTags
+            let createdChanged = !Calendar.current.isDate(createdAt, equalTo: item.createdAt, toGranularity: .minute)
+            let completedChanged: Bool
+            if item.isCompleted {
+                completedChanged = !Calendar.current.isDate(
+                    completedAt,
+                    equalTo: item.completedAt ?? item.createdAt,
+                    toGranularity: .minute
+                )
+            } else {
+                completedChanged = false
+            }
+            return trimmedName != item.name
+                || selectedTags != originalTags
+                || createdChanged
+                || completedChanged
         }
     }
 
@@ -54,6 +75,23 @@ struct ItemEditorView: View {
                         .accessibilityLabel(ShopStrings.itemName)
                 }
 
+                if case .edit = mode {
+                    Section {
+                        DatePicker(
+                            ShopStrings.addedAt,
+                            selection: $createdAt,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        if editingItem?.isCompleted == true {
+                            DatePicker(
+                                ShopStrings.completedAtLabel,
+                                selection: $completedAt,
+                                displayedComponents: [.date, .hourAndMinute]
+                            )
+                        }
+                    }
+                }
+
                 if !dataStore.tags.isEmpty {
                     Section(ShopStrings.tags) {
                         ForEach(dataStore.tags) { tag in
@@ -66,13 +104,14 @@ struct ItemEditorView: View {
                                         .frame(width: 10, height: 10)
                                     Text(tag.name)
                                         .foregroundStyle(.primary)
-                                    Spacer()
+                                    Spacer(minLength: 0)
                                     if selectedTags.contains(tag.id) {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(ShopTheme.naturalGreen)
+                                            .foregroundStyle(ShopTheme.brandRed)
                                     }
                                 }
-                                .frame(minHeight: ShopTheme.minTouchTarget)
+                                .frame(maxWidth: .infinity, minHeight: ShopTheme.minTouchTarget, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(
@@ -122,16 +161,20 @@ struct ItemEditorView: View {
             }
             .onAppear(perform: loadInitialState)
         }
-        .tint(ShopTheme.naturalGreen)
+        .tint(ShopTheme.brandRed)
     }
 
     private func loadInitialState() {
         switch mode {
         case .add:
+            createdAt = Date()
+            completedAt = Date()
             isNameFocused = true
         case .edit(let item):
             itemName = item.name
             selectedTags = Set(item.tags.map(\.id))
+            createdAt = item.createdAt
+            completedAt = item.completedAt ?? item.createdAt
             isNameFocused = true
         }
     }
@@ -152,7 +195,14 @@ struct ItemEditorView: View {
         case .add:
             dataStore.addItem(name: trimmedName, tags: tags)
         case .edit(let item):
-            dataStore.updateItem(item, name: trimmedName, tags: tags)
+            dataStore.updateItem(
+                item,
+                name: trimmedName,
+                tags: tags,
+                createdAt: createdAt,
+                completedAt: item.isCompleted ? completedAt : nil,
+                updateCompletedAt: item.isCompleted
+            )
         }
 
         dismiss()

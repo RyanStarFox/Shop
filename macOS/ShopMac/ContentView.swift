@@ -402,7 +402,8 @@ private struct MacItemListView: View {
             filter: dataStore.selectedFilter,
             selectedTags: dataStore.selectedTags,
             dateRange: dataStore.dateRange,
-            searchIsActive: searchIsActive
+            searchIsActive: searchIsActive,
+            sortOption: dataStore.sortOption
         )
     }
 

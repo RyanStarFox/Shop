@@ -34,7 +34,7 @@ struct ShopApp: App {
                 .environmentObject(watchSync)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
-                .tint(ShopTheme.naturalGreen)
+                .tint(ShopTheme.brandRed)
                 .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
                 .onAppear {
                     watchSync.configure(with: dataStore)

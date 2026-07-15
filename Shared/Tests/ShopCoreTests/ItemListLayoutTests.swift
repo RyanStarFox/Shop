@@ -81,7 +81,8 @@ final class ItemListLayoutTests: XCTestCase {
             ItemListReorderPolicy.canReorder(
                 filter: store.selectedFilter,
                 selectedTags: store.selectedTags,
-                dateRange: store.dateRange
+                dateRange: store.dateRange,
+                sortOption: store.sortOption
             )
         )
     }

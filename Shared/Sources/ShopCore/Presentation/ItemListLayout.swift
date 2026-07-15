@@ -36,9 +36,13 @@ public enum ItemListReorderPolicy {
         filter: DataStore.FilterOption,
         selectedTags: Set<UUID>,
         dateRange: ClosedRange<Date>?,
-        searchIsActive: Bool = false
+        searchIsActive: Bool = false,
+        sortOption: DataStore.SortOption = .manual
     ) -> Bool {
-        guard !searchIsActive, selectedTags.isEmpty, dateRange == nil else {
+        guard sortOption == .manual,
+              !searchIsActive,
+              selectedTags.isEmpty,
+              dateRange == nil else {
             return false
         }
         switch filter {

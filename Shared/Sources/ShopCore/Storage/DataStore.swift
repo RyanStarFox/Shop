@@ -16,6 +16,7 @@ public final class DataStore: ObservableObject {
     @Published public var selectedFilter: FilterOption = .all
     @Published public var selectedTags: Set<UUID> = []
     @Published public var dateRange: ClosedRange<Date>?
+    @Published public var sortOption: SortOption = .manual
     private var localMutationObservers: [UUID: () -> Void] = [:]
 
     public enum FilterOption: String, CaseIterable {
@@ -25,6 +26,14 @@ public final class DataStore: ObservableObject {
         case today
         case week
         case month
+    }
+
+    public enum SortOption: String, CaseIterable, Sendable {
+        case manual
+        case createdNewest
+        case createdOldest
+        case nameAscending
+        case nameDescending
     }
 
     public init(inMemory: Bool = false, deviceID: String? = nil) {
@@ -81,7 +90,26 @@ public final class DataStore: ObservableObject {
             result = result.filter { range.contains($0.createdAt) }
         }
 
-        return result
+        return sorted(result)
+    }
+
+    private func sorted(_ items: [ShoppingItem]) -> [ShoppingItem] {
+        switch sortOption {
+        case .manual:
+            return items
+        case .createdNewest:
+            return items.sorted { $0.createdAt > $1.createdAt }
+        case .createdOldest:
+            return items.sorted { $0.createdAt < $1.createdAt }
+        case .nameAscending:
+            return items.sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        case .nameDescending:
+            return items.sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedDescending
+            }
+        }
     }
 
     // MARK: - Item operations
@@ -137,12 +165,22 @@ public final class DataStore: ObservableObject {
         )
     }
 
-    public func updateItem(_ item: ShoppingItem, name: String? = nil, tags: [Tag]? = nil) {
+    public func updateItem(
+        _ item: ShoppingItem,
+        name: String? = nil,
+        tags: [Tag]? = nil,
+        createdAt: Date? = nil,
+        completedAt: Date? = nil,
+        updateCompletedAt: Bool = false
+    ) {
         performMutation {
             try shoppingStore.updateItem(
                 itemID: item.id,
                 name: name,
-                tagIDs: tags?.map(\.id)
+                tagIDs: tags?.map(\.id),
+                createdAt: createdAt,
+                completedAt: completedAt,
+                updateCompletedAt: updateCompletedAt
             )
         }
     }
@@ -151,7 +189,8 @@ public final class DataStore: ObservableObject {
         guard ItemListReorderPolicy.canReorder(
             filter: selectedFilter,
             selectedTags: selectedTags,
-            dateRange: dateRange
+            dateRange: dateRange,
+            sortOption: sortOption
         ) else {
             return
         }

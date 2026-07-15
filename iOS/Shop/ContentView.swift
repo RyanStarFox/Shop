@@ -5,104 +5,145 @@ struct ContentView: View {
     @EnvironmentObject private var dataStore: DataStore
     @EnvironmentObject private var undoCoordinator: UndoCoordinator
 
+    @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
     @State private var editorMode: ItemEditorView.Mode?
     @State private var showSettings = false
     @State private var showFilter = false
     @State private var searchText = ""
+    @State private var undoError: String?
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottom) {
-                ShopSurfaceBackground()
-
-                VStack(spacing: 0) {
-                    if hasAnyItems {
-                        SearchBar(text: $searchText)
-                            .padding(.horizontal, ShopTheme.spacingMD)
-                            .padding(.top, ShopTheme.spacingSM)
-                    }
-
-                    if dataStore.selectedFilter != .all || !dataStore.selectedTags.isEmpty {
-                        ActiveFilterBar(
-                            currentFilter: $dataStore.selectedFilter,
-                            selectedTags: $dataStore.selectedTags,
-                            allTags: dataStore.tags
-                        )
-                        .padding(.horizontal, ShopTheme.spacingMD)
-                        .padding(.vertical, ShopTheme.spacingXS + 2)
-                    }
-
-                    if filteredItems.isEmpty {
-                        EmptyStateView {
-                            editorMode = .add
+            ShopSurfaceBackground()
+                .overlay {
+                    VStack(spacing: 0) {
+                        if hasAnyItems {
+                            SearchBar(text: $searchText)
+                                .padding(.horizontal, ShopTheme.spacingMD)
+                                .padding(.top, ShopTheme.spacingSM)
                         }
-                    } else {
-                        ItemListView(
-                            filteredItems: filteredItems,
-                            searchIsActive: !searchText.isEmpty,
-                            onEditItem: { item in
-                                editorMode = .edit(item)
-                            }
-                        )
-                    }
-                }
 
-                UndoBanner(undoCoordinator: undoCoordinator)
-            }
-            .navigationTitle(ShopStrings.appName)
-            .modifier(PendingCountSubtitle(count: dataStore.activeItems.count))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showFilter.toggle()
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .symbolVariant(
-                                dataStore.selectedFilter != .all || !dataStore.selectedTags.isEmpty
-                                    ? .fill
-                                    : .none
+                        if dataStore.selectedFilter != .all || !dataStore.selectedTags.isEmpty {
+                            ActiveFilterBar(
+                                currentFilter: $dataStore.selectedFilter,
+                                selectedTags: $dataStore.selectedTags,
+                                allTags: dataStore.tags
                             )
-                    }
-                    .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
-                    .accessibilityLabel(ShopStrings.filter)
-                    .accessibilityHint(ShopStrings.filter)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: ShopTheme.spacingSM + 4) {
-                        Button {
-                            showSettings.toggle()
-                        } label: {
-                            Image(systemName: "gearshape")
+                            .padding(.horizontal, ShopTheme.spacingMD)
+                            .padding(.vertical, ShopTheme.spacingXS + 2)
                         }
-                        .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
-                        .accessibilityLabel(ShopStrings.settings)
 
-                        Button {
-                            editorMode = .add
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
+                        if filteredItems.isEmpty {
+                            EmptyStateView {
+                                editorMode = .add
+                            }
+                        } else {
+                            ItemListView(
+                                filteredItems: filteredItems,
+                                searchIsActive: !searchText.isEmpty,
+                                onEditItem: { item in
+                                    editorMode = .edit(item)
+                                }
+                            )
                         }
-                        .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
-                        .accessibilityLabel(ShopStrings.addItem)
                     }
                 }
-            }
+                .navigationTitle(ShopStrings.appName)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        HStack(spacing: ShopTheme.spacingXS) {
+                            Button {
+                                showFilter.toggle()
+                            } label: {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .symbolVariant(
+                                        dataStore.selectedFilter != .all || !dataStore.selectedTags.isEmpty
+                                            ? .fill
+                                            : .none
+                                    )
+                            }
+                            .accessibilityLabel(ShopStrings.filter)
+
+                            Menu {
+                                ForEach(DataStore.SortOption.allCases, id: \.self) { option in
+                                    Button {
+                                        dataStore.sortOption = option
+                                    } label: {
+                                        if dataStore.sortOption == option {
+                                            Label(option.title, systemImage: "checkmark")
+                                        } else {
+                                            Text(option.title)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "arrow.up.arrow.down.circle")
+                                    .symbolVariant(dataStore.sortOption == .manual ? .none : .fill)
+                            }
+                            .accessibilityLabel(ShopStrings.sort)
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        HStack(spacing: ShopTheme.spacingSM) {
+                            if undoCoordinator.currentAction != nil {
+                                Button(ShopStrings.undo) {
+                                    performUndo()
+                                }
+                                .fontWeight(.semibold)
+                                .accessibilityLabel(ShopStrings.undo)
+                                .accessibilityValue(undoCoordinator.currentAction?.message ?? "")
+                            }
+
+                            Button {
+                                showSettings.toggle()
+                            } label: {
+                                Image(systemName: "gearshape")
+                            }
+                            .accessibilityLabel(ShopStrings.settings)
+
+                            Button {
+                                editorMode = .add
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                            .accessibilityLabel(ShopStrings.addItem)
+                        }
+                    }
+                }
+                .alert(ShopStrings.undo, isPresented: Binding(
+                    get: { undoError != nil },
+                    set: { if !$0 { undoError = nil } }
+                )) {
+                    Button(ShopStrings.dismiss, role: .cancel) {}
+                } message: {
+                    Text(undoError ?? "")
+                }
         }
-        .tint(ShopTheme.naturalGreen)
+        .tint(ShopTheme.brandRed)
         .sheet(item: $editorMode) { mode in
             ItemEditorView(mode: mode)
                 .presentationDetents([.medium, .large])
                 .presentationCornerRadius(ShopTheme.spacingLG)
+                .preferredColorScheme(
+                    AppearancePreference(storageValue: appearanceMode).colorScheme
+                )
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .presentationCornerRadius(ShopTheme.spacingLG)
+                .preferredColorScheme(
+                    AppearancePreference(storageValue: appearanceMode).colorScheme
+                )
         }
         .sheet(isPresented: $showFilter) {
             FilterView()
                 .presentationDetents([.medium, .large])
                 .presentationCornerRadius(ShopTheme.spacingLG)
+                .preferredColorScheme(
+                    AppearancePreference(storageValue: appearanceMode).colorScheme
+                )
         }
     }
 
@@ -114,6 +155,14 @@ struct ContentView: View {
         let filtered = dataStore.filteredItems
         guard !searchText.isEmpty else { return filtered }
         return filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private func performUndo() {
+        do {
+            try undoCoordinator.undo()
+        } catch {
+            undoError = error.localizedDescription
+        }
     }
 }
 
@@ -128,16 +177,14 @@ extension ItemEditorView.Mode: Identifiable {
     }
 }
 
-private struct PendingCountSubtitle: ViewModifier {
-    let count: Int
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            content.navigationSubtitle(
-                count == 0 ? "" : ShopStrings.pendingCount(count)
-            )
-        } else {
-            content
+private extension DataStore.SortOption {
+    var title: String {
+        switch self {
+        case .manual: ShopStrings.sortManual
+        case .createdNewest: ShopStrings.sortCreatedNewest
+        case .createdOldest: ShopStrings.sortCreatedOldest
+        case .nameAscending: ShopStrings.sortNameAscending
+        case .nameDescending: ShopStrings.sortNameDescending
         }
     }
 }

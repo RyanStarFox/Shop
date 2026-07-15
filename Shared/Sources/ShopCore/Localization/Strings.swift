@@ -40,6 +40,33 @@ public enum ShopStrings {
     public static var archiveSection: String {
         NSLocalizedString("item.archive_section", bundle: .module, comment: "Archive section")
     }
+    public static var addedAt: String {
+        NSLocalizedString("item.added_at", bundle: .module, comment: "Added date label")
+    }
+    public static var completedAtLabel: String {
+        NSLocalizedString("item.completed_at", bundle: .module, comment: "Completed date label")
+    }
+    public static var sort: String {
+        NSLocalizedString("sort.title", bundle: .module, comment: "Sort")
+    }
+    public static var sortManual: String {
+        NSLocalizedString("sort.manual", bundle: .module, comment: "Manual sort")
+    }
+    public static var sortCreatedNewest: String {
+        NSLocalizedString("sort.created_newest", bundle: .module, comment: "Newest first")
+    }
+    public static var sortCreatedOldest: String {
+        NSLocalizedString("sort.created_oldest", bundle: .module, comment: "Oldest first")
+    }
+    public static var sortNameAscending: String {
+        NSLocalizedString("sort.name_ascending", bundle: .module, comment: "Name A to Z")
+    }
+    public static var sortNameDescending: String {
+        NSLocalizedString("sort.name_descending", bundle: .module, comment: "Name Z to A")
+    }
+    public static var customColor: String {
+        NSLocalizedString("tag.custom_color", bundle: .module, comment: "Custom color")
+    }
     public static func pendingCount(_ count: Int) -> String {
         String(
             format: NSLocalizedString("item.pending_count", comment: "Pending item count"),
@@ -154,9 +181,6 @@ public enum ShopStrings {
     }
 
     // MARK: - Time
-    public static var addedAt: String {
-        NSLocalizedString("time.added_at", comment: "Added at")
-    }
     public static var justNow: String {
         NSLocalizedString("time.just_now", comment: "Just now")
     }

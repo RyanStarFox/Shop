@@ -117,7 +117,7 @@ struct GlassButton: View {
             .padding(.vertical, ShopTheme.spacingSM + 4)
             .frame(maxWidth: isFullWidth ? .infinity : nil)
             .frame(minHeight: ShopTheme.minTouchTarget)
-            .background(ShopTheme.naturalGreen.gradient, in: Capsule(style: .continuous))
+            .background(ShopTheme.brandRed.gradient, in: Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isButton)
@@ -162,6 +162,7 @@ struct TagChip: View {
                 .lineLimit(1)
                 .padding(.horizontal, ShopTheme.spacingSM + 4)
                 .padding(.vertical, ShopTheme.spacingXS + 2)
+                .frame(minHeight: ShopTheme.minTouchTarget)
                 .background {
                     Capsule(style: .continuous)
                         .fill(
@@ -178,9 +179,9 @@ struct TagChip: View {
                         }
                 }
                 .foregroundStyle(isSelected ? tag.displayColor : .primary)
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .frame(minHeight: ShopTheme.minTouchTarget)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel(tag.name)
     }

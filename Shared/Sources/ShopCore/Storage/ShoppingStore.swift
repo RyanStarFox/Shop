@@ -139,6 +139,9 @@ public final class ShoppingStore {
         itemID: UUID,
         name: String? = nil,
         tagIDs: [UUID]? = nil,
+        createdAt: Date? = nil,
+        completedAt: Date? = nil,
+        updateCompletedAt: Bool = false,
         now: Date = Date()
     ) throws {
         guard let item = item(id: itemID) else {
@@ -147,6 +150,8 @@ public final class ShoppingStore {
         let selectedTags = try tagIDs.map(activeTags(ids:))
         let previousName = item.name
         let previousTags = item.tags
+        let previousCreatedAt = item.createdAt
+        let previousCompletedAt = item.completedAt
         let previousUpdatedAt = item.updatedAt
         let previousDeviceID = item.lastEditorDeviceID
 
@@ -156,6 +161,15 @@ public final class ShoppingStore {
         if let selectedTags {
             item.tags = selectedTags
         }
+        if let createdAt {
+            item.createdAt = createdAt
+        }
+        if updateCompletedAt {
+            item.completedAt = completedAt
+            if let completedAt {
+                item.isCompleted = true
+            }
+        }
         advanceVersion(of: item, now: now)
 
         do {
@@ -163,6 +177,8 @@ public final class ShoppingStore {
         } catch {
             item.name = previousName
             item.tags = previousTags
+            item.createdAt = previousCreatedAt
+            item.completedAt = previousCompletedAt
             item.updatedAt = previousUpdatedAt
             item.lastEditorDeviceID = previousDeviceID
             modelContext.rollback()
