@@ -1,26 +1,41 @@
 import SwiftUI
+import WatchKit
 import ShopCore
 
 struct WatchAddItemView: View {
-    @EnvironmentObject var dataStore: DataStore
-    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var dataStore: DataStore
+    @Environment(\.dismiss) private var dismiss
 
     @State private var itemName = ""
+    @State private var selectedTagIDs: Set<UUID> = []
     @FocusState private var isFocused: Bool
+
+    private var trimmedName: String {
+        itemName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canAdd: Bool {
+        !trimmedName.isEmpty
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: ShopTheme.spacingMD) {
                     TextField(ShopStrings.itemName, text: $itemName)
                         .focused($isFocused)
                         .textFieldStyle(.plain)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, ShopTheme.spacingSM + 4)
+                        .padding(.vertical, ShopTheme.spacingSM + 2)
                         .background {
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: ShopTheme.rowCornerRadius, style: .continuous)
                                 .fill(.ultraThinMaterial)
                         }
+                        .accessibilityLabel(ShopStrings.itemName)
+
+                    if !dataStore.tags.isEmpty {
+                        tagSelectionSection
+                    }
 
                     Button {
                         addItem()
@@ -31,17 +46,19 @@ struct WatchAddItemView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .tint(.accentColor)
-                    .disabled(itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .tint(ShopTheme.naturalGreen)
+                    .disabled(!canAdd)
+                    .accessibilityLabel(ShopStrings.addItem)
                 }
                 .padding()
             }
             .navigationTitle(ShopStrings.addItem)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(WatchStrings.cancel) {
                         dismiss()
                     }
+                    .accessibilityLabel(WatchStrings.cancel)
                 }
             }
         }
@@ -50,10 +67,70 @@ struct WatchAddItemView: View {
         }
     }
 
+    @ViewBuilder
+    private var tagSelectionSection: some View {
+        VStack(alignment: .leading, spacing: ShopTheme.spacingSM) {
+            Text(ShopStrings.tags)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: ShopTheme.spacingXS) {
+                ForEach(dataStore.tags) { tag in
+                    Button {
+                        toggleTag(tag.id)
+                    } label: {
+                        HStack(spacing: ShopTheme.spacingSM) {
+                            Circle()
+                                .fill(tag.displayColor)
+                                .frame(width: 8, height: 8)
+
+                            Text(tag.name)
+                                .font(.caption)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+
+                            Spacer(minLength: 0)
+
+                            if selectedTagIDs.contains(tag.id) {
+                                Image(systemName: "checkmark")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(ShopTheme.naturalGreen)
+                            }
+                        }
+                        .frame(minHeight: ShopTheme.minTouchTarget)
+                        .padding(.horizontal, ShopTheme.spacingSM)
+                        .background {
+                            RoundedRectangle(cornerRadius: ShopTheme.rowCornerRadius, style: .continuous)
+                                .fill(
+                                    selectedTagIDs.contains(tag.id)
+                                        ? tag.displayColor.opacity(0.15)
+                                        : Color.clear
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(
+                        selectedTagIDs.contains(tag.id) ? .isSelected : []
+                    )
+                    .accessibilityLabel(tag.name)
+                }
+            }
+        }
+    }
+
+    private func toggleTag(_ tagID: UUID) {
+        if selectedTagIDs.contains(tagID) {
+            selectedTagIDs.remove(tagID)
+        } else {
+            selectedTagIDs.insert(tagID)
+        }
+    }
+
     private func addItem() {
-        let name = itemName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        dataStore.addItem(name: name)
+        guard canAdd else { return }
+        let selectedTags = dataStore.tags.filter { selectedTagIDs.contains($0.id) }
+        dataStore.addItem(name: trimmedName, tags: selectedTags)
+        WKInterfaceDevice.current().play(.success)
         dismiss()
     }
 }

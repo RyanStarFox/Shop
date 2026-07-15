@@ -8,6 +8,7 @@
 "item.mark_complete" = "标记完成";
 "item.mark_incomplete" = "取消完成";
 "item.empty" = "还没有物品，点击 + 添加吧！";
+"item.archive_section" = "已完成";
 "item.search" = "搜索物品...";
 
 /* Tags */
@@ -60,6 +61,9 @@
 "webdav.upload_failed" = "上传失败，请检查服务器设置";
 "webdav.download_failed" = "下载失败，请检查服务器设置";
 "webdav.configured" = "WebDAV 已配置";
+
+/* Common */
+"common.cancel" = "取消";
 
 /* Errors */
 "error.unknown" = "未知错误";

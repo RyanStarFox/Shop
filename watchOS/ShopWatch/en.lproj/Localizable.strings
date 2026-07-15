@@ -8,6 +8,7 @@
 "item.mark_complete" = "Mark complete";
 "item.mark_incomplete" = "Mark incomplete";
 "item.empty" = "No items yet. Tap + to add one!";
+"item.archive_section" = "Completed";
 "item.search" = "Search items...";
 
 /* Tags */
@@ -60,6 +61,9 @@
 "webdav.upload_failed" = "Upload failed. Check server settings.";
 "webdav.download_failed" = "Download failed. Check server settings.";
 "webdav.configured" = "WebDAV configured";
+
+/* Common */
+"common.cancel" = "Cancel";
 
 /* Errors */
 "error.unknown" = "Unknown error";
