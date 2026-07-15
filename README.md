@@ -102,6 +102,20 @@ User-facing strings live in:
 
 Access shared strings through `ShopStrings`.
 
+## Verification Status
+
+Automated gates on this branch:
+
+- `cd Shared && swift test` — 91 tests passed
+- Unsigned builds for `Shop`, `ShopMac`, and `ShopWatch` succeeded
+- Static checks: no whitespace errors; no hardcoded English `Text`/`TextField` labels in platform Swift; WebDAV passwords use Keychain (legacy UserDefaults key only removed during migration)
+
+Still requiring human / hardware validation (not claimed passing):
+
+- Simulator pass for light/dark/system appearance, largest Dynamic Type, VoiceOver, Reduce Motion, and small/large Watch layouts
+- Disposable WebDAV scenarios (first upload, merge, offline concurrent edit, 412 retry, bad credentials, timeout recovery)
+- Paired iPhone ↔ Apple Watch add/complete/restore, offline delivery, reconnect, and idempotency
+
 ## License
 
 MIT
