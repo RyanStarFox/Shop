@@ -9,11 +9,26 @@ struct MacSettingsView: View {
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
+    @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
     @State private var webdavPassword = ""
     @State private var webdavSyncTask: Task<Void, Never>?
 
     var body: some View {
         TabView {
+            Form {
+                Picker(ShopStrings.appearance, selection: $appearanceMode) {
+                    Text(ShopStrings.appearanceSystem).tag(AppearancePreference.system.rawValue)
+                    Text(ShopStrings.appearanceLight).tag(AppearancePreference.light.rawValue)
+                    Text(ShopStrings.darkMode).tag(AppearancePreference.dark.rawValue)
+                }
+                .pickerStyle(.radioGroup)
+            }
+            .formStyle(.grouped)
+            .padding()
+            .tabItem {
+                Label(ShopStrings.appearance, systemImage: "paintpalette")
+            }
+
             WebDAVSettingsTab(
                 server: $webdavServer,
                 username: $webdavUsername,

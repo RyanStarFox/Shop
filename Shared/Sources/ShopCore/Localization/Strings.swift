@@ -38,7 +38,7 @@ public enum ShopStrings {
         NSLocalizedString("item.discard_changes", comment: "Discard changes")
     }
     public static var archiveSection: String {
-        NSLocalizedString("item.archive_section", comment: "Archive section")
+        NSLocalizedString("item.archive_section", bundle: .module, comment: "Archive section")
     }
     public static func pendingCount(_ count: Int) -> String {
         String(
@@ -131,11 +131,26 @@ public enum ShopStrings {
     public static var appearance: String {
         NSLocalizedString("settings.appearance", comment: "Appearance")
     }
+    public static var appearanceSystem: String {
+        NSLocalizedString("appearance.system", bundle: .module, comment: "System appearance")
+    }
+    public static var appearanceLight: String {
+        NSLocalizedString("appearance.light", bundle: .module, comment: "Light appearance")
+    }
     public static var darkMode: String {
         NSLocalizedString("settings.dark_mode", comment: "Dark Mode")
     }
     public static var about: String {
         NSLocalizedString("settings.about", comment: "About")
+    }
+    public static var appTagline: String {
+        NSLocalizedString("app.tagline", bundle: .module, comment: "App tagline")
+    }
+    public static var appVersion: String {
+        NSLocalizedString("app.version", bundle: .module, comment: "App version label")
+    }
+    public static var cancel: String {
+        NSLocalizedString("common.cancel", bundle: .module, comment: "Cancel")
     }
 
     // MARK: - Time

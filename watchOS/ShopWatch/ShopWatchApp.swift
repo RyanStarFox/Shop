@@ -6,6 +6,7 @@ import ShopCore
 struct ShopWatchApp: App {
     @StateObject private var dataStore = DataStore()
     @StateObject private var watchSync = WatchSyncService()
+    @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -13,6 +14,8 @@ struct ShopWatchApp: App {
             WatchContentView()
                 .environmentObject(dataStore)
                 .environmentObject(watchSync)
+                .tint(ShopTheme.naturalGreen)
+                .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
                 .onAppear {
                     watchSync.configure(with: dataStore)
                     watchSync.requestLatestSnapshot()

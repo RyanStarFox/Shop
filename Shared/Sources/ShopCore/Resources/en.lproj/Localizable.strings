@@ -5,6 +5,12 @@
 "undo.item_deleted" = "Item deleted";
 "undo.tag_deleted" = "Tag deleted";
 "common.dismiss" = "OK";
+"common.cancel" = "Cancel";
+"appearance.system" = "System";
+"appearance.light" = "Light";
+"app.tagline" = "A shopping list for iPhone, Mac, and Apple Watch";
+"app.version" = "Shop! v1.0.0";
+"item.archive_section" = "Archive";
 
 /* Shopping store errors */
 "error.store.container_creation_failed" = "Unable to create the shopping store: %@";

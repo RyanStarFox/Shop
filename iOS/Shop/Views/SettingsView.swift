@@ -30,9 +30,9 @@ struct SettingsView: View {
                                     .font(.headline)
 
                                 Picker(ShopStrings.appearance, selection: $appearanceMode) {
-                                    Text("System").tag("system")
-                                    Text("Light").tag("light")
-                                    Text(ShopStrings.darkMode).tag("dark")
+                                    Text(ShopStrings.appearanceSystem).tag(AppearancePreference.system.rawValue)
+                                    Text(ShopStrings.appearanceLight).tag(AppearancePreference.light.rawValue)
+                                    Text(ShopStrings.darkMode).tag(AppearancePreference.dark.rawValue)
                                 }
                                 .pickerStyle(.segmented)
                             }
@@ -173,10 +173,10 @@ struct SettingsView: View {
                                 Label(ShopStrings.about, systemImage: "info.circle")
                                     .font(.headline)
 
-                                Text("Shop! v1.0.0")
+                                Text(ShopStrings.appVersion)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                Text("A beautiful shopping list for all your devices")
+                                Text(ShopStrings.appTagline)
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
                             }

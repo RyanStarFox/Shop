@@ -11,6 +11,7 @@ struct ShopMacApp: App {
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
+    @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
 
     init() {
         let store = ShopCore.DataStore()
@@ -32,6 +33,7 @@ struct ShopMacApp: App {
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
                 .tint(ShopTheme.naturalGreen)
+                .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
                 .frame(minWidth: 720, idealWidth: 960, minHeight: 520, idealHeight: 700)
                 .onAppear {
                     webdavSync.migrateLegacyPasswordIfNeeded(
@@ -54,6 +56,7 @@ struct ShopMacApp: App {
                 .environmentObject(undoCoordinator)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
+                .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
         }
     }
 }
