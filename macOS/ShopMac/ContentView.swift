@@ -666,11 +666,15 @@ private struct MacItemDetailView: View {
 
     private func save(_ item: ShoppingItem) {
         let trimmed = itemName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
         let tags = dataStore.tags.filter { selectedTags.contains($0.id) }
         let originalTags = Set(item.tags.map(\.id))
-        guard trimmed != item.name || selectedTags != originalTags else { return }
-        dataStore.updateItem(item, name: trimmed, tags: tags)
+        let nameUpdate: String? = {
+            guard !trimmed.isEmpty else { return nil }
+            return trimmed == item.name ? nil : trimmed
+        }()
+        let tagsUpdate: [Tag]? = selectedTags == originalTags ? nil : tags
+        guard nameUpdate != nil || tagsUpdate != nil else { return }
+        dataStore.updateItem(item, name: nameUpdate, tags: tagsUpdate)
     }
 }
 
