@@ -73,7 +73,7 @@ targets:
         type: group
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.shop.watch
+        PRODUCT_BUNDLE_IDENTIFIER: com.shop.ios.watch
         INFOPLIST_FILE: watchOS/ShopWatch/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_LANGUAGE: en
