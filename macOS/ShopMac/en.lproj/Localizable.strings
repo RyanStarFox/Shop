@@ -7,8 +7,19 @@
 "item.delete" = "Delete";
 "item.mark_complete" = "Mark complete";
 "item.mark_incomplete" = "Mark incomplete";
-"item.empty" = "No items yet. Tap + to add one!";
+"item.empty" = "No items yet. Press ⌘N to add one!";
 "item.search" = "Search items...";
+"item.edit" = "Edit Item";
+"item.save" = "Save";
+"item.discard_changes" = "Discard Changes";
+"item.archive_section" = "Completed";
+"item.pending_count" = "%d to buy";
+
+/* Mac */
+"mac.empty_add_shortcut" = "Press ⌘N to add an item";
+"mac.empty_search_shortcut" = "Press ⌘F to search";
+"mac.detail_placeholder" = "Select an item to edit its name and tags";
+"mac.detail_missing_item" = "This item is no longer available.";
 
 /* Tags */
 "tags.title" = "Tags";
@@ -26,6 +37,10 @@
 "filter.today" = "Today";
 "filter.week" = "This Week";
 "filter.month" = "This Month";
+"filter.reset" = "Reset";
+"filter.custom_date_range" = "Custom date range";
+"filter.start_date" = "Start";
+"filter.end_date" = "End";
 
 /* Settings */
 "settings.title" = "Settings";

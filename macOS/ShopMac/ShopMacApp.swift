@@ -1,9 +1,11 @@
 import SwiftUI
+import SwiftData
 import ShopCore
 
 @main
 struct ShopMacApp: App {
-    @StateObject private var dataStore: DataStore
+    @StateObject private var dataStore: ShopCore.DataStore
+    @StateObject private var undoCoordinator: UndoCoordinator
     @StateObject private var webdavSync: WebDAVSyncService
     @StateObject private var syncCoordinator: SyncCoordinator
 
@@ -11,9 +13,13 @@ struct ShopMacApp: App {
     @AppStorage("webdav_username") private var webdavUsername = ""
 
     init() {
-        let store = DataStore()
+        let store = ShopCore.DataStore()
         let coordinator = SyncCoordinator(dataStore: store)
+        let undo = UndoCoordinator(performMutation: { mutation in
+            try store.performUndoMutation(mutation)
+        })
         _dataStore = StateObject(wrappedValue: store)
+        _undoCoordinator = StateObject(wrappedValue: undo)
         _syncCoordinator = StateObject(wrappedValue: coordinator)
         _webdavSync = StateObject(wrappedValue: WebDAVSyncService(coordinator: coordinator))
     }
@@ -22,9 +28,11 @@ struct ShopMacApp: App {
         WindowGroup {
             MacContentView()
                 .environmentObject(dataStore)
+                .environmentObject(undoCoordinator)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
-                .frame(minWidth: 400, idealWidth: 480, minHeight: 500, idealHeight: 700)
+                .tint(ShopTheme.naturalGreen)
+                .frame(minWidth: 720, idealWidth: 960, minHeight: 520, idealHeight: 700)
                 .onAppear {
                     webdavSync.migrateLegacyPasswordIfNeeded(
                         serverURL: webdavServer,
@@ -36,12 +44,14 @@ struct ShopMacApp: App {
                     )
                 }
         }
+        .modelContainer(dataStore.modelContainer)
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .defaultSize(width: 960, height: 700)
 
         Settings {
             MacSettingsView()
                 .environmentObject(dataStore)
+                .environmentObject(undoCoordinator)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
         }
