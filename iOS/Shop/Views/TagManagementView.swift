@@ -183,7 +183,7 @@ struct TagEditRow: View {
                     .shadow(color: tag.displayColor.opacity(0.4), radius: 4)
 
                 if isEditing {
-                    TextField("Name", text: $editName)
+                    TextField(ShopStrings.tagName, text: $editName)
                         .textFieldStyle(.plain)
                         .onSubmit {
                             onRename(editName)
