@@ -146,9 +146,11 @@ public final class DataStore: ObservableObject {
     }
 
     public func moveItems(from source: IndexSet, to destination: Int) {
-        guard selectedFilter == .active,
-              selectedTags.isEmpty,
-              dateRange == nil else {
+        guard ItemListReorderPolicy.canReorder(
+            filter: selectedFilter,
+            selectedTags: selectedTags,
+            dateRange: dateRange
+        ) else {
             return
         }
         performMutation {

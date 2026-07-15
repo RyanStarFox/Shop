@@ -41,7 +41,7 @@ struct UndoBanner: View {
                 get: { undoError != nil },
                 set: { if !$0 { undoError = nil } }
             )) {
-                Button(ShopStrings.undo, role: .cancel) {}
+                Button(ShopStrings.dismiss, role: .cancel) {}
             } message: {
                 Text(undoError ?? "")
             }

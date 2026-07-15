@@ -241,6 +241,9 @@ public enum ShopStrings {
     public static var undoTagDeleted: String {
         NSLocalizedString("undo.tag_deleted", bundle: .module, comment: "Tag deleted")
     }
+    public static var dismiss: String {
+        NSLocalizedString("common.dismiss", bundle: .module, comment: "Dismiss an alert")
+    }
 
     // MARK: - Shopping Store Errors
     public static func shoppingStoreContainerCreationFailed(

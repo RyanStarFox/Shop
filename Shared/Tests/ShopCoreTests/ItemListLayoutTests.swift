@@ -86,10 +86,30 @@ final class ItemListLayoutTests: XCTestCase {
         )
     }
 
+    func testUnfilteredAllListAllowsActiveReorder() {
+        let store = DataStore(inMemory: true)
+        store.addItem(name: "First")
+        store.addItem(name: "Second")
+        store.addItem(name: "Third")
+        store.selectedFilter = .all
+
+        let before = store.activeItems.map(\.id)
+        store.moveItems(from: IndexSet(integer: 0), to: 2)
+
+        XCTAssertEqual(store.activeItems.map(\.id), [before[1], before[0], before[2]])
+    }
+
     func testReorderAllowedOnlyForUnfilteredActiveList() {
         XCTAssertTrue(
             ItemListReorderPolicy.canReorder(
                 filter: .all,
+                selectedTags: [],
+                dateRange: nil
+            )
+        )
+        XCTAssertTrue(
+            ItemListReorderPolicy.canReorder(
+                filter: .active,
                 selectedTags: [],
                 dateRange: nil
             )
@@ -106,6 +126,14 @@ final class ItemListLayoutTests: XCTestCase {
                 filter: .all,
                 selectedTags: [UUID()],
                 dateRange: nil
+            )
+        )
+        XCTAssertFalse(
+            ItemListReorderPolicy.canReorder(
+                filter: .all,
+                selectedTags: [],
+                dateRange: nil,
+                searchIsActive: true
             )
         )
     }

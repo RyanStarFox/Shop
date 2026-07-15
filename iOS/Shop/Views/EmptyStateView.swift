@@ -80,27 +80,28 @@ struct FilterChip: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: ShopTheme.spacingXS) {
-            Text(label)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-            Button(action: onRemove) {
+        Button(action: onRemove) {
+            HStack(spacing: ShopTheme.spacingXS) {
+                Text(label)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
             }
-            .frame(minWidth: ShopTheme.minTouchTarget / 2, minHeight: ShopTheme.minTouchTarget / 2)
-            .accessibilityLabel(ShopStrings.filterReset)
+            .padding(.horizontal, ShopTheme.spacingSM + 4)
+            .frame(minHeight: ShopTheme.minTouchTarget)
+            .background {
+                Capsule(style: .continuous)
+                    .fill(color.opacity(0.12))
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .stroke(color.opacity(0.25), lineWidth: 1)
+                    }
+            }
+            .foregroundStyle(color)
         }
-        .padding(.horizontal, ShopTheme.spacingSM + 4)
-        .padding(.vertical, ShopTheme.spacingXS + 2)
-        .background {
-            Capsule(style: .continuous)
-                .fill(color.opacity(0.12))
-                .overlay {
-                    Capsule(style: .continuous)
-                        .stroke(color.opacity(0.25), lineWidth: 1)
-                }
-        }
-        .foregroundStyle(color)
+        .buttonStyle(.plain)
+        .accessibilityLabel(ShopStrings.filterReset)
+        .accessibilityValue(label)
     }
 }

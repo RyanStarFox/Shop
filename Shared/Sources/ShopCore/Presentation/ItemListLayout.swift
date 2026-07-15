@@ -35,8 +35,17 @@ public enum ItemListReorderPolicy {
     public static func canReorder(
         filter: DataStore.FilterOption,
         selectedTags: Set<UUID>,
-        dateRange: ClosedRange<Date>?
+        dateRange: ClosedRange<Date>?,
+        searchIsActive: Bool = false
     ) -> Bool {
-        filter == .all && selectedTags.isEmpty && dateRange == nil
+        guard !searchIsActive, selectedTags.isEmpty, dateRange == nil else {
+            return false
+        }
+        switch filter {
+        case .all, .active:
+            return true
+        case .completed, .today, .week, .month:
+            return false
+        }
     }
 }

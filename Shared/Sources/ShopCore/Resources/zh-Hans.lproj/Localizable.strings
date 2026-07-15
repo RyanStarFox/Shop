@@ -4,6 +4,7 @@
 "undo.item_restored" = "已恢复到清单";
 "undo.item_deleted" = "物品已删除";
 "undo.tag_deleted" = "标签已删除";
+"common.dismiss" = "好";
 
 /* Shopping store errors */
 "error.store.container_creation_failed" = "创建购物数据存储失败：%@";

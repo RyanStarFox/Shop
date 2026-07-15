@@ -39,6 +39,7 @@ struct ContentView: View {
                     } else {
                         ItemListView(
                             filteredItems: filteredItems,
+                            searchIsActive: !searchText.isEmpty,
                             onEditItem: { item in
                                 editorMode = .edit(item)
                             }

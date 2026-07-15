@@ -3,6 +3,7 @@ import ShopCore
 
 struct ItemListView: View {
     let filteredItems: [ShoppingItem]
+    let searchIsActive: Bool
     let onEditItem: (ShoppingItem) -> Void
 
     @EnvironmentObject private var dataStore: DataStore
@@ -17,7 +18,8 @@ struct ItemListView: View {
         ItemListReorderPolicy.canReorder(
             filter: dataStore.selectedFilter,
             selectedTags: dataStore.selectedTags,
-            dateRange: dataStore.dateRange
+            dateRange: dataStore.dateRange,
+            searchIsActive: searchIsActive
         )
     }
 

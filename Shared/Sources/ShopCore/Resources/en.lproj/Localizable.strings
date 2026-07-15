@@ -4,6 +4,7 @@
 "undo.item_restored" = "Restored to list";
 "undo.item_deleted" = "Item deleted";
 "undo.tag_deleted" = "Tag deleted";
+"common.dismiss" = "OK";
 
 /* Shopping store errors */
 "error.store.container_creation_failed" = "Unable to create the shopping store: %@";
