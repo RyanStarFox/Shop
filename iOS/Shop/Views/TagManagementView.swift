@@ -3,6 +3,7 @@ import ShopCore
 
 struct TagManagementView: View {
     @EnvironmentObject var dataStore: DataStore
+    @EnvironmentObject var undoCoordinator: UndoCoordinator
     @Environment(\.dismiss) var dismiss
 
     @State private var newTagName = ""
@@ -28,7 +29,7 @@ struct TagManagementView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LiquidGlassBackground()
+                ShopSurfaceBackground()
 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -95,7 +96,7 @@ struct TagManagementView: View {
 
                                     ForEach(dataStore.tags) { tag in
                                         TagEditRow(tag: tag) {
-                                            dataStore.deleteTag(tag)
+                                            dataStore.deleteTag(tag, presentUndo: undoCoordinator.present)
                                         } onRename: { newName in
                                             dataStore.updateTag(tag, name: newName)
                                         } onColorChange: { newColor in
@@ -213,6 +214,8 @@ struct TagEditRow: View {
                         .foregroundStyle(.red)
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
+                .accessibilityLabel(ShopStrings.deleteItem)
             }
 
             if isEditing {

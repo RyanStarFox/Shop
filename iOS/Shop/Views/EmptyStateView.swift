@@ -2,26 +2,20 @@ import SwiftUI
 import ShopCore
 
 struct EmptyStateView: View {
-    @Binding var showAddSheet: Bool
+    let onAdd: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: ShopTheme.spacingLG) {
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 140, height: 140)
+            Image(systemName: "cart")
+                .font(.system(size: 52, weight: .medium))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
-                Image(systemName: "cart")
-                    .font(.system(size: 56, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            .shadow(color: .black.opacity(0.05), radius: 20)
-
-            VStack(spacing: 8) {
+            VStack(spacing: ShopTheme.spacingSM) {
                 Text(ShopStrings.appName)
-                    .font(.title.weight(.bold))
+                    .font(.title2.weight(.semibold))
 
                 Text(ShopStrings.emptyList)
                     .font(.body)
@@ -31,15 +25,14 @@ struct EmptyStateView: View {
 
             GlassButton(
                 ShopStrings.addItem,
-                systemImage: "plus.circle.fill",
-                isFullWidth: false
+                systemImage: "plus.circle.fill"
             ) {
-                showAddSheet = true
+                onAdd()
             }
 
             Spacer()
         }
-        .padding()
+        .padding(ShopTheme.spacingMD)
     }
 }
 
@@ -50,11 +43,11 @@ struct ActiveFilterBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: ShopTheme.spacingSM) {
                 if currentFilter != .all {
                     FilterChip(
                         label: filterLabel,
-                        color: .accentColor
+                        color: ShopTheme.naturalGreen
                     ) {
                         currentFilter = .all
                     }
@@ -71,12 +64,12 @@ struct ActiveFilterBar: View {
 
     private var filterLabel: String {
         switch currentFilter {
-        case .all: return ShopStrings.filterAll
-        case .active: return ShopStrings.filterActive
-        case .completed: return ShopStrings.filterCompleted
-        case .today: return ShopStrings.filterToday
-        case .week: return ShopStrings.filterWeek
-        case .month: return ShopStrings.filterMonth
+        case .all: ShopStrings.filterAll
+        case .active: ShopStrings.filterActive
+        case .completed: ShopStrings.filterCompleted
+        case .today: ShopStrings.filterToday
+        case .week: ShopStrings.filterWeek
+        case .month: ShopStrings.filterMonth
         }
     }
 }
@@ -87,24 +80,25 @@ struct FilterChip: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: ShopTheme.spacingXS) {
             Text(label)
                 .font(.caption.weight(.medium))
-            Button {
-                onRemove()
-            } label: {
+                .lineLimit(1)
+            Button(action: onRemove) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
             }
+            .frame(minWidth: ShopTheme.minTouchTarget / 2, minHeight: ShopTheme.minTouchTarget / 2)
+            .accessibilityLabel(ShopStrings.filterReset)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, ShopTheme.spacingSM + 4)
+        .padding(.vertical, ShopTheme.spacingXS + 2)
         .background {
             Capsule(style: .continuous)
-                .fill(color.opacity(0.15))
+                .fill(color.opacity(0.12))
                 .overlay {
                     Capsule(style: .continuous)
-                        .stroke(color.opacity(0.3), lineWidth: 1)
+                        .stroke(color.opacity(0.25), lineWidth: 1)
                 }
         }
         .foregroundStyle(color)

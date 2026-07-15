@@ -28,6 +28,25 @@ public enum ShopStrings {
     public static var markIncomplete: String {
         NSLocalizedString("item.mark_incomplete", comment: "Mark incomplete")
     }
+    public static var editItem: String {
+        NSLocalizedString("item.edit", comment: "Edit item")
+    }
+    public static var saveItem: String {
+        NSLocalizedString("item.save", comment: "Save item")
+    }
+    public static var discardChanges: String {
+        NSLocalizedString("item.discard_changes", comment: "Discard changes")
+    }
+    public static var archiveSection: String {
+        NSLocalizedString("item.archive_section", comment: "Archive section")
+    }
+    public static func pendingCount(_ count: Int) -> String {
+        String(
+            format: NSLocalizedString("item.pending_count", comment: "Pending item count"),
+            locale: .current,
+            count
+        )
+    }
 
     // MARK: - Tags
     public static var tags: String {
@@ -70,6 +89,18 @@ public enum ShopStrings {
     }
     public static var filterMonth: String {
         NSLocalizedString("filter.month", comment: "This month")
+    }
+    public static var filterReset: String {
+        NSLocalizedString("filter.reset", comment: "Reset filters")
+    }
+    public static var filterCustomDateRange: String {
+        NSLocalizedString("filter.custom_date_range", comment: "Custom date range")
+    }
+    public static var filterStartDate: String {
+        NSLocalizedString("filter.start_date", comment: "Start date")
+    }
+    public static var filterEndDate: String {
+        NSLocalizedString("filter.end_date", comment: "End date")
     }
 
     // MARK: - Settings

@@ -2,8 +2,8 @@ import SwiftUI
 import ShopCore
 
 struct FilterView: View {
-    @EnvironmentObject var dataStore: DataStore
-    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var dataStore: DataStore
+    @Environment(\.dismiss) private var dismiss
 
     @State private var localFilter: DataStore.FilterOption
     @State private var localTags: Set<UUID>
@@ -12,136 +12,138 @@ struct FilterView: View {
     @State private var endDate = Date()
 
     init() {
-        _localFilter = State(initialValue: DataStore.FilterOption.all)
+        _localFilter = State(initialValue: .all)
         _localTags = State(initialValue: [])
     }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                LiquidGlassBackground()
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Time filter
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Label(ShopStrings.filter, systemImage: "clock.arrow.2.circlepath")
-                                    .font(.headline)
-
-                                Picker(ShopStrings.filter, selection: $localFilter) {
-                                    ForEach(DataStore.FilterOption.allCases, id: \.self) { opt in
-                                        Text(filterLabel(for: opt)).tag(opt)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        // Tags filter
-                        if !dataStore.tags.isEmpty {
-                            GlassCard {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Label(ShopStrings.tags, systemImage: "tag")
-                                        .font(.headline)
-
-                                    LazyVGrid(
-                                        columns: [GridItem(.adaptive(minimum: 90), spacing: 8)],
-                                        spacing: 8
-                                    ) {
-                                        ForEach(dataStore.tags) { tag in
-                                            TagChip(
-                                                tag: tag,
-                                                isSelected: localTags.contains(tag.id),
-                                                onTap: {
-                                                    if localTags.contains(tag.id) {
-                                                        localTags.remove(tag.id)
-                                                    } else {
-                                                        localTags.insert(tag.id)
-                                                    }
-                                                }
-                                            )
-                                        }
-                                    }
+            Form {
+                Section(ShopStrings.filter) {
+                    ForEach(DataStore.FilterOption.allCases, id: \.self) { option in
+                        Button {
+                            localFilter = option
+                        } label: {
+                            HStack {
+                                Text(filterLabel(for: option))
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if localFilter == option {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(ShopTheme.naturalGreen)
                                 }
                             }
-                            .padding(.horizontal)
+                            .frame(minHeight: ShopTheme.minTouchTarget)
                         }
-
-                        // Date range
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Button {
-                                    showDatePicker.toggle()
-                                } label: {
-                                    HStack {
-                                        Label("Custom date range", systemImage: "calendar")
-                                            .font(.headline)
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                        Image(systemName: showDatePicker ? "chevron.up" : "chevron.down")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-
-                                if showDatePicker {
-                                    DatePicker("Start", selection: $startDate, displayedComponents: [.date])
-                                        .datePickerStyle(.compact)
-                                    DatePicker("End", selection: $endDate, displayedComponents: [.date])
-                                        .datePickerStyle(.compact)
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        // Apply button
-                        GlassButton(ShopStrings.filter, systemImage: "checkmark", isFullWidth: true) {
-                            applyFilter()
-                            dismiss()
-                        }
-                        .padding(.horizontal)
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(localFilter == option ? .isSelected : [])
+                        .accessibilityLabel(filterLabel(for: option))
                     }
-                    .padding(.vertical)
+                }
+
+                if !dataStore.tags.isEmpty {
+                    Section(ShopStrings.tags) {
+                        ForEach(dataStore.tags) { tag in
+                            Button {
+                                toggleTag(tag.id)
+                            } label: {
+                                HStack(spacing: ShopTheme.spacingSM) {
+                                    Circle()
+                                        .fill(tag.displayColor)
+                                        .frame(width: 10, height: 10)
+                                    Text(tag.name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    if localTags.contains(tag.id) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(ShopTheme.naturalGreen)
+                                    }
+                                }
+                                .frame(minHeight: ShopTheme.minTouchTarget)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(localTags.contains(tag.id) ? .isSelected : [])
+                            .accessibilityLabel(tag.name)
+                        }
+                    }
+                }
+
+                Section {
+                    Toggle(ShopStrings.filterCustomDateRange, isOn: $showDatePicker)
+                        .tint(ShopTheme.naturalGreen)
+
+                    if showDatePicker {
+                        DatePicker(
+                            ShopStrings.filterStartDate,
+                            selection: $startDate,
+                            displayedComponents: [.date]
+                        )
+                        DatePicker(
+                            ShopStrings.filterEndDate,
+                            selection: $endDate,
+                            displayedComponents: [.date]
+                        )
+                    }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(ShopSurfaceBackground())
             .navigationTitle(ShopStrings.filter)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Reset") {
-                        localFilter = .all
-                        localTags = []
-                        startDate = Date().addingTimeInterval(-7 * 86400)
-                        endDate = Date()
+                    Button(ShopStrings.filterReset) {
+                        resetFilters()
                     }
+                    .accessibilityLabel(ShopStrings.filterReset)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
+                    Button(ShopStrings.filter) {
+                        applyFilter()
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
                     }
+                    .fontWeight(.semibold)
+                    .accessibilityLabel(ShopStrings.filter)
                 }
             }
             .onAppear {
                 localFilter = dataStore.selectedFilter
                 localTags = dataStore.selectedTags
+                if let range = dataStore.dateRange {
+                    showDatePicker = true
+                    startDate = range.lowerBound
+                    endDate = range.upperBound
+                }
             }
+        }
+        .tint(ShopTheme.naturalGreen)
+    }
+
+    private func filterLabel(for option: DataStore.FilterOption) -> String {
+        switch option {
+        case .all: ShopStrings.filterAll
+        case .active: ShopStrings.filterActive
+        case .completed: ShopStrings.filterCompleted
+        case .today: ShopStrings.filterToday
+        case .week: ShopStrings.filterWeek
+        case .month: ShopStrings.filterMonth
         }
     }
 
-    private func filterLabel(for opt: DataStore.FilterOption) -> String {
-        switch opt {
-        case .all: return ShopStrings.filterAll
-        case .active: return ShopStrings.filterActive
-        case .completed: return ShopStrings.filterCompleted
-        case .today: return ShopStrings.filterToday
-        case .week: return ShopStrings.filterWeek
-        case .month: return ShopStrings.filterMonth
+    private func toggleTag(_ id: UUID) {
+        if localTags.contains(id) {
+            localTags.remove(id)
+        } else {
+            localTags.insert(id)
         }
+    }
+
+    private func resetFilters() {
+        localFilter = .all
+        localTags = []
+        showDatePicker = false
+        startDate = Date().addingTimeInterval(-7 * 86400)
+        endDate = Date()
     }
 
     private func applyFilter() {

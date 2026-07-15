@@ -7,6 +7,11 @@
 "item.delete" = "删除";
 "item.mark_complete" = "标记完成";
 "item.mark_incomplete" = "取消完成";
+"item.edit" = "编辑物品";
+"item.save" = "保存";
+"item.discard_changes" = "放弃更改";
+"item.archive_section" = "已完成";
+"item.pending_count" = "%d 项待购";
 "item.empty" = "还没有物品，点击 + 添加吧！";
 "item.search" = "搜索物品...";
 
@@ -26,6 +31,10 @@
 "filter.today" = "今天";
 "filter.week" = "本周";
 "filter.month" = "本月";
+"filter.reset" = "重置";
+"filter.custom_date_range" = "自定义日期范围";
+"filter.start_date" = "开始";
+"filter.end_date" = "结束";
 
 /* Settings */
 "settings.title" = "设置";

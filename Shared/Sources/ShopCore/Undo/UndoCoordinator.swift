@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 public struct UndoAction: Identifiable {
@@ -17,11 +18,11 @@ public struct UndoAction: Identifiable {
 }
 
 @MainActor
-public final class UndoCoordinator {
+public final class UndoCoordinator: ObservableObject {
     public typealias Sleep = @Sendable (TimeInterval) async -> Void
     public typealias MutationPerformer = (@MainActor () throws -> Void) throws -> Void
 
-    public private(set) var currentAction: UndoAction?
+    @Published public private(set) var currentAction: UndoAction?
 
     private let duration: TimeInterval
     private let sleep: Sleep

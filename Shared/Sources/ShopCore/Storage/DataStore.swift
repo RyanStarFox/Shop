@@ -93,18 +93,46 @@ public final class DataStore: ObservableObject {
     }
 
     public func toggleItem(_ item: ShoppingItem) {
+        setCompleted(item, completed: !item.isCompleted, presentUndo: { _ in })
+    }
+
+    public func setCompleted(
+        _ item: ShoppingItem,
+        completed: Bool,
+        presentUndo: (UndoAction) -> Void
+    ) {
+        let previousIsCompleted = item.isCompleted
+        let previousCompletedAt = item.completedAt
         performMutation {
             try shoppingStore.setCompleted(
                 itemID: item.id,
-                completed: !item.isCompleted
+                completed: completed
             )
         }
+        presentUndo(
+            ShoppingUndo.undoCompletion(
+                itemID: item.id,
+                previousIsCompleted: previousIsCompleted,
+                previousCompletedAt: previousCompletedAt,
+                store: shoppingStore
+            )
+        )
     }
 
-    public func deleteItem(_ item: ShoppingItem) {
+    public func deleteItem(
+        _ item: ShoppingItem,
+        presentUndo: (UndoAction) -> Void = { _ in }
+    ) {
+        let itemID = item.id
         performMutation {
-            try shoppingStore.softDeleteItem(itemID: item.id)
+            try shoppingStore.softDeleteItem(itemID: itemID)
         }
+        presentUndo(
+            ShoppingUndo.undoItemDelete(
+                itemID: itemID,
+                store: shoppingStore
+            )
+        )
     }
 
     public func updateItem(_ item: ShoppingItem, name: String? = nil, tags: [Tag]? = nil) {
@@ -136,10 +164,41 @@ public final class DataStore: ObservableObject {
         }
     }
 
-    public func deleteTag(_ tag: Tag) {
+    public func deleteTag(
+        _ tag: Tag,
+        presentUndo: (UndoAction) -> Void = { _ in }
+    ) {
+        let linkedItemIDs = items
+            .filter { item in
+                item.tags.contains { $0.id == tag.id }
+            }
+            .map(\.id)
+        let tagID = tag.id
         performMutation {
-            try shoppingStore.deleteTag(id: tag.id)
+            try shoppingStore.deleteTag(id: tagID)
         }
+        presentUndo(
+            ShoppingUndo.undoTagDelete(
+                tagID: tagID,
+                linkedItemIDs: linkedItemIDs,
+                store: shoppingStore
+            )
+        )
+    }
+
+    public func performUndoMutation(_ mutation: () throws -> Void) throws {
+        do {
+            try mutation()
+            lastError = nil
+            localMutationObservers.values.forEach { $0() }
+        } catch let error as ShoppingStoreError {
+            lastError = error
+            throw error
+        } catch {
+            lastError = .saveFailed(error.localizedDescription)
+            throw error
+        }
+        fetchData()
     }
 
     public func updateTag(_ tag: Tag, name: String? = nil, colorHex: String? = nil) {

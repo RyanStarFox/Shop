@@ -7,6 +7,11 @@
 "item.delete" = "Delete";
 "item.mark_complete" = "Mark complete";
 "item.mark_incomplete" = "Mark incomplete";
+"item.edit" = "Edit Item";
+"item.save" = "Save";
+"item.discard_changes" = "Discard Changes";
+"item.archive_section" = "Completed";
+"item.pending_count" = "%d to buy";
 "item.empty" = "No items yet. Tap + to add one!";
 "item.search" = "Search items...";
 
@@ -26,6 +31,10 @@
 "filter.today" = "Today";
 "filter.week" = "This Week";
 "filter.month" = "This Month";
+"filter.reset" = "Reset";
+"filter.custom_date_range" = "Custom date range";
+"filter.start_date" = "Start";
+"filter.end_date" = "End";
 
 /* Settings */
 "settings.title" = "Settings";

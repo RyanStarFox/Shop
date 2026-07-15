@@ -5,6 +5,7 @@ import ShopCore
 @main
 struct ShopApp: App {
     @StateObject private var dataStore: ShopCore.DataStore
+    @StateObject private var undoCoordinator: UndoCoordinator
     @StateObject private var watchSync = WatchSyncService()
     @StateObject private var webdavSync: WebDAVSyncService
     @StateObject private var syncCoordinator: SyncCoordinator
@@ -15,7 +16,11 @@ struct ShopApp: App {
     init() {
         let store = ShopCore.DataStore()
         let coordinator = SyncCoordinator(dataStore: store)
+        let undo = UndoCoordinator(performMutation: { mutation in
+            try store.performUndoMutation(mutation)
+        })
         _dataStore = StateObject(wrappedValue: store)
+        _undoCoordinator = StateObject(wrappedValue: undo)
         _syncCoordinator = StateObject(wrappedValue: coordinator)
         _webdavSync = StateObject(wrappedValue: WebDAVSyncService(coordinator: coordinator))
     }
@@ -24,10 +29,11 @@ struct ShopApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(dataStore)
+                .environmentObject(undoCoordinator)
                 .environmentObject(watchSync)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
-                .tint(.accentColor)
+                .tint(ShopTheme.naturalGreen)
                 .onAppear {
                     watchSync.configure(with: dataStore)
                     webdavSync.migrateLegacyPasswordIfNeeded(
