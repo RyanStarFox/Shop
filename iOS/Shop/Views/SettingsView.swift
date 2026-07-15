@@ -179,11 +179,14 @@ struct SettingsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Text(ShopStrings.dataRetentionFooter)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(.horizontal)
 

@@ -19,7 +19,7 @@ settings:
     DEVELOPMENT_TEAM: ""
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
-    INFOPLIST_KEY_CFBundleDisplayName: "Shop!"
+    INFOPLIST_KEY_CFBundleDisplayName: "Shop !"
     GENERATE_INFOPLIST_FILE: YES
 
 configs:
