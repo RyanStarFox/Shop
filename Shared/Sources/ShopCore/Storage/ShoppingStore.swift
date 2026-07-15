@@ -243,6 +243,79 @@ public final class ShoppingStore {
         }
     }
 
+    public func restoreCompletionState(
+        itemID: UUID,
+        isCompleted: Bool,
+        completedAt: Date?,
+        now: Date = Date()
+    ) throws {
+        guard let item = item(id: itemID) else {
+            throw ShoppingStoreError.itemNotFound(itemID)
+        }
+        let previousCompleted = item.isCompleted
+        let previousCompletedAt = item.completedAt
+        let previousUpdatedAt = item.updatedAt
+        let previousDeviceID = item.lastEditorDeviceID
+
+        item.isCompleted = isCompleted
+        item.completedAt = completedAt
+        advanceVersion(of: item, now: now)
+
+        do {
+            try save()
+        } catch {
+            item.isCompleted = previousCompleted
+            item.completedAt = previousCompletedAt
+            item.updatedAt = previousUpdatedAt
+            item.lastEditorDeviceID = previousDeviceID
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    public func restoreTag(
+        id: UUID,
+        linkedItemIDs: [UUID],
+        now: Date = Date()
+    ) throws {
+        guard let tag = tag(id: id) else {
+            throw ShoppingStoreError.tagNotFound(id)
+        }
+
+        let previousDeletedAt = tag.deletedAt
+        let previousUpdatedAt = tag.updatedAt
+        let previousDeviceID = tag.lastEditorDeviceID
+        let liveItems = linkedItemIDs.compactMap { itemID -> ShoppingItem? in
+            guard let item = item(id: itemID), item.deletedAt == nil else { return nil }
+            return item
+        }
+        let previousItemState = liveItems.map {
+            ($0, $0.tags, $0.updatedAt, $0.lastEditorDeviceID)
+        }
+
+        tag.deletedAt = nil
+        advanceVersion(of: tag, now: now)
+        for item in liveItems where !item.tags.contains(where: { $0.id == id }) {
+            item.tags.append(tag)
+            advanceVersion(of: item, now: now)
+        }
+
+        do {
+            try save()
+        } catch {
+            for (item, tags, updatedAt, editorDeviceID) in previousItemState {
+                item.tags = tags
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = editorDeviceID
+            }
+            tag.deletedAt = previousDeletedAt
+            tag.updatedAt = previousUpdatedAt
+            tag.lastEditorDeviceID = previousDeviceID
+            modelContext.rollback()
+            throw error
+        }
+    }
+
     @discardableResult
     public func addTag(
         name: String,

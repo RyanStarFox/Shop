@@ -1,3 +1,10 @@
+/* Undo */
+"undo.action" = "Undo";
+"undo.item_completed" = "Marked as completed";
+"undo.item_restored" = "Restored to list";
+"undo.item_deleted" = "Item deleted";
+"undo.tag_deleted" = "Tag deleted";
+
 /* Shopping store errors */
 "error.store.container_creation_failed" = "Unable to create the shopping store: %@";
 "error.store.fetch_failed" = "Unable to fetch shopping data: %@";

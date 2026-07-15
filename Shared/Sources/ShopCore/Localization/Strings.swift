@@ -194,6 +194,23 @@ public enum ShopStrings {
         NSLocalizedString("webdav.error.sync_failed", bundle: .module, comment: "WebDAV sync failed")
     }
 
+    // MARK: - Undo
+    public static var undo: String {
+        NSLocalizedString("undo.action", bundle: .module, comment: "Undo")
+    }
+    public static var undoItemCompleted: String {
+        NSLocalizedString("undo.item_completed", bundle: .module, comment: "Item completed")
+    }
+    public static var undoItemRestored: String {
+        NSLocalizedString("undo.item_restored", bundle: .module, comment: "Item restored")
+    }
+    public static var undoItemDeleted: String {
+        NSLocalizedString("undo.item_deleted", bundle: .module, comment: "Item deleted")
+    }
+    public static var undoTagDeleted: String {
+        NSLocalizedString("undo.tag_deleted", bundle: .module, comment: "Tag deleted")
+    }
+
     // MARK: - Shopping Store Errors
     public static func shoppingStoreContainerCreationFailed(
         _ detail: String,

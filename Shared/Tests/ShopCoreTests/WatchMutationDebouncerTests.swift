@@ -62,15 +62,13 @@ final class WatchMutationDebouncerTests: XCTestCase {
         XCTAssertEqual(events, ["first-started", "first-finished", "second"])
     }
 
-    func testDeinitCancelsPendingSleeper() async {
+    func testCancelClearsPendingSleeper() async {
         let scheduler = DebounceTestScheduler()
-        var debouncer: WatchMutationDebouncer? = WatchMutationDebouncer(
-            sleep: scheduler.sleep
-        )
-        debouncer?.schedule {}
+        let debouncer = WatchMutationDebouncer(sleep: scheduler.sleep)
+        debouncer.schedule {}
         _ = await scheduler.waitForNextSleeper()
 
-        debouncer = nil
+        debouncer.cancel()
         for _ in 0..<100 {
             if await scheduler.sleeperCount == 0 {
                 break

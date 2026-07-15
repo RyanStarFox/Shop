@@ -1,3 +1,10 @@
+/* Undo */
+"undo.action" = "撤销";
+"undo.item_completed" = "已标记为完成";
+"undo.item_restored" = "已恢复到清单";
+"undo.item_deleted" = "物品已删除";
+"undo.tag_deleted" = "标签已删除";
+
 /* Shopping store errors */
 "error.store.container_creation_failed" = "创建购物数据存储失败：%@";
 "error.store.fetch_failed" = "读取购物数据失败：%@";
