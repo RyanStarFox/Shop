@@ -61,6 +61,8 @@ public final class SyncCoordinator: ObservableObject {
     }
 
     public func scheduleSync() {
+        guard transport != nil else { return }
+
         if syncTask != nil {
             needsAnotherPass = true
             return
@@ -74,7 +76,7 @@ public final class SyncCoordinator: ObservableObject {
             await self.sleep(2)
             guard !Task.isCancelled, generation == self.debounceGeneration else { return }
             self.debounceTask = nil
-            await self.syncNow()
+            await self.beginSync(reportMissingTransport: false)
         }
     }
 
@@ -92,25 +94,31 @@ public final class SyncCoordinator: ObservableObject {
             return
         }
 
+        await beginSync(reportMissingTransport: true)
+    }
+
+    private func beginSync(reportMissingTransport: Bool) async {
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.runSyncPasses()
+            await self.runSyncPasses(reportMissingTransport: reportMissingTransport)
         }
         syncTask = task
         await task.value
     }
 
-    private func runSyncPasses() async {
+    private func runSyncPasses(reportMissingTransport: Bool) async {
         defer { syncTask = nil }
         repeat {
             needsAnotherPass = false
-            await syncOnce()
+            await syncOnce(reportMissingTransport: reportMissingTransport)
         } while needsAnotherPass
     }
 
-    private func syncOnce() async {
+    private func syncOnce(reportMissingTransport: Bool) async {
         guard let transport else {
-            status = .failed(message: ShopStrings.webdavNotConfigured, canRetry: false)
+            if reportMissingTransport {
+                status = .failed(message: ShopStrings.webdavNotConfigured, canRetry: false)
+            }
             return
         }
 

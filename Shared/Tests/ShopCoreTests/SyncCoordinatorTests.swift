@@ -30,6 +30,39 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(countAfterAdvancing, 0)
     }
 
+    func testAutomaticSyncWithoutTransportKeepsIdleStatus() async {
+        let store = DataStore(inMemory: true, deviceID: "local")
+        let scheduler = TestScheduler()
+        let coordinator = SyncCoordinator(
+            dataStore: store,
+            transport: nil,
+            sleep: scheduler.sleep
+        )
+
+        store.addItem(name: "Local")
+        coordinator.scheduleSync()
+
+        let sleeperCount = await scheduler.sleeperCount
+        XCTAssertEqual(sleeperCount, 0)
+        XCTAssertEqual(coordinator.status, .idle(lastSuccess: nil))
+        XCTAssertNil(coordinator.status.failureMessage)
+    }
+
+    func testManualSyncWithoutTransportReportsNotConfigured() async {
+        let store = DataStore(inMemory: true, deviceID: "local")
+        let coordinator = SyncCoordinator(
+            dataStore: store,
+            transport: nil
+        )
+
+        await coordinator.syncNow()
+
+        XCTAssertEqual(
+            coordinator.status,
+            .failed(message: ShopStrings.webdavNotConfigured, canRetry: false)
+        )
+    }
+
     func testScheduledChangesWithinDebounceProduceOneSync() async throws {
         let store = DataStore(inMemory: true, deviceID: "local")
         store.addItem(name: "Local")

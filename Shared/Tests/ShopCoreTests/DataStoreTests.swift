@@ -32,6 +32,18 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(dataStore.items.count, 0)
     }
 
+    func testFailedCompletionDoesNotPresentUndo() {
+        let missing = ShoppingItem(name: "Ghost")
+        var presented = 0
+
+        dataStore.setCompleted(missing, completed: true) { _ in
+            presented += 1
+        }
+
+        XCTAssertEqual(presented, 0)
+        XCTAssertEqual(dataStore.lastError, .itemNotFound(missing.id))
+    }
+
     func testFilterActive() {
         dataStore.addItem(name: "Item 1")
         dataStore.addItem(name: "Item 2")

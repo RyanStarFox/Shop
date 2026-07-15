@@ -103,12 +103,13 @@ public final class DataStore: ObservableObject {
     ) {
         let previousIsCompleted = item.isCompleted
         let previousCompletedAt = item.completedAt
-        performMutation {
+        let succeeded = performMutation {
             try shoppingStore.setCompleted(
                 itemID: item.id,
                 completed: completed
             )
         }
+        guard succeeded else { return }
         presentUndo(
             ShoppingUndo.undoCompletion(
                 itemID: item.id,
@@ -124,9 +125,10 @@ public final class DataStore: ObservableObject {
         presentUndo: (UndoAction) -> Void = { _ in }
     ) {
         let itemID = item.id
-        performMutation {
+        let succeeded = performMutation {
             try shoppingStore.softDeleteItem(itemID: itemID)
         }
+        guard succeeded else { return }
         presentUndo(
             ShoppingUndo.undoItemDelete(
                 itemID: itemID,
@@ -176,9 +178,10 @@ public final class DataStore: ObservableObject {
             }
             .map(\.id)
         let tagID = tag.id
-        performMutation {
+        let succeeded = performMutation {
             try shoppingStore.deleteTag(id: tagID)
         }
+        guard succeeded else { return }
         presentUndo(
             ShoppingUndo.undoTagDelete(
                 tagID: tagID,
@@ -281,17 +284,21 @@ public final class DataStore: ObservableObject {
         fetchData()
     }
 
-    private func performMutation(_ mutation: () throws -> Void) {
+    @discardableResult
+    private func performMutation(_ mutation: () throws -> Void) -> Bool {
         do {
             try mutation()
             lastError = nil
             localMutationObservers.values.forEach { $0() }
+            fetchData()
+            return true
         } catch let error as ShoppingStoreError {
             lastError = error
         } catch {
             lastError = .saveFailed(error.localizedDescription)
         }
         fetchData()
+        return false
     }
 
     private static func stableDeviceID() -> String {

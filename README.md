@@ -80,7 +80,7 @@ Uses WatchConnectivity. Delivery is best when the companion is reachable; applic
 3. Enter username and password — the password is stored in Keychain, not UserDefaults
 4. Use **Sync Now**, or rely on automatic debounced sync after edits
 
-Typical endpoints include Nextcloud, ownCloud, and Synology WebDAV folders. The remote document is `shop_sync.json`.
+Typical endpoints include Nextcloud, ownCloud, and Synology WebDAV folders. The remote document is `shop_sync.json`. Shop apps configure HTTPS-only WebDAV by default.
 
 ## Architecture
 
@@ -115,6 +115,7 @@ Still requiring human / hardware validation (not claimed passing):
 - Simulator pass for light/dark/system appearance, largest Dynamic Type, VoiceOver, Reduce Motion, and small/large Watch layouts
 - Disposable WebDAV scenarios (first upload, merge, offline concurrent edit, 412 retry, bad credentials, timeout recovery)
 - Paired iPhone ↔ Apple Watch add/complete/restore, offline delivery, reconnect, and idempotency
+- Optional follow-up: physical tombstone purge after successful sync past retention (snapshots currently retain soft-deleted records)
 
 ## License
 
