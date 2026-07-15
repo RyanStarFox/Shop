@@ -48,6 +48,25 @@ struct ContentView: View {
                         }
                     }
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button {
+                            editorMode = .add
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 56, height: 56)
+                                .background(ShopTheme.brandRed, in: Circle())
+                                .shadow(color: ShopTheme.brandRed.opacity(0.35), radius: 10, y: 4)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(ShopStrings.addItem)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.bottom, ShopTheme.spacingSM)
+                }
                 .navigationTitle(ShopStrings.appName)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -120,14 +139,6 @@ struct ContentView: View {
                                 Image(systemName: "gearshape")
                             }
                             .accessibilityLabel(ShopStrings.settings)
-
-                            Button {
-                                editorMode = .add
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                            .accessibilityLabel(ShopStrings.addItem)
                         }
                     }
                 }

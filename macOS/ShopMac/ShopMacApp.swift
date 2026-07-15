@@ -11,6 +11,7 @@ struct ShopMacApp: App {
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
+    @AppStorage("webdav_path") private var webdavPath = ""
     @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
 
     init() {
@@ -38,11 +39,13 @@ struct ShopMacApp: App {
                 .onAppear {
                     webdavSync.migrateLegacyPasswordIfNeeded(
                         serverURL: webdavServer,
-                        username: webdavUsername
+                        username: webdavUsername,
+                        folderPath: webdavPath
                     )
                     webdavSync.restoreCredentials(
                         serverURL: webdavServer,
-                        username: webdavUsername
+                        username: webdavUsername,
+                        folderPath: webdavPath
                     )
                     dataStore.pruneExpiredData()
                 }

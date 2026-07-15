@@ -11,6 +11,7 @@ struct SettingsView: View {
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
+    @AppStorage("webdav_path") private var webdavPath = ""
     @AppStorage("appearance_mode") private var appearanceMode = "system"
     @State private var webdavPassword = ""
     @State private var showTagManagement = false
@@ -87,6 +88,16 @@ struct SettingsView: View {
                                 )
 
                                 GlassTextField(
+                                    placeholder: ShopStrings.webdavFolderPath,
+                                    text: $webdavPath,
+                                    systemImage: "folder"
+                                )
+
+                                Text(ShopStrings.webdavFolderPathHint)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                GlassTextField(
                                     placeholder: ShopStrings.webdavUsername,
                                     text: $webdavUsername,
                                     systemImage: "person"
@@ -119,7 +130,8 @@ struct SettingsView: View {
                                             try webdavSync.saveCredentials(
                                                 serverURL: webdavServer,
                                                 username: webdavUsername,
-                                                password: webdavPassword
+                                                password: webdavPassword,
+                                                folderPath: webdavPath
                                             )
                                             webdavPassword = ""
                                             await syncCoordinator.syncNow()
@@ -250,11 +262,13 @@ struct SettingsView: View {
             .onAppear {
                 webdavSync.migrateLegacyPasswordIfNeeded(
                     serverURL: webdavServer,
-                    username: webdavUsername
+                    username: webdavUsername,
+                    folderPath: webdavPath
                 )
                 webdavSync.restoreCredentials(
                     serverURL: webdavServer,
-                    username: webdavUsername
+                    username: webdavUsername,
+                    folderPath: webdavPath
                 )
             }
         }

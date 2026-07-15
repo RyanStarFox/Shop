@@ -35,7 +35,12 @@ public final class WebDAVSyncService: ObservableObject {
         }
     }
 
-    public func saveCredentials(serverURL: String, username: String, password: String) throws {
+    public func saveCredentials(
+        serverURL: String,
+        username: String,
+        password: String,
+        folderPath: String = ""
+    ) throws {
         guard !serverURL.isEmpty, !username.isEmpty else {
             transport = nil
             coordinator?.configure(transport: nil)
@@ -55,7 +60,12 @@ public final class WebDAVSyncService: ObservableObject {
                 configurationError = ShopStrings.webdavNotConfigured
                 return
             }
-            try configureTransport(serverURL: serverURL, username: username, password: storedPassword)
+            try configureTransport(
+                serverURL: serverURL,
+                username: username,
+                password: storedPassword,
+                folderPath: folderPath
+            )
         } catch {
             transport = nil
             coordinator?.configure(transport: nil)
@@ -65,7 +75,7 @@ public final class WebDAVSyncService: ObservableObject {
         }
     }
 
-    public func restoreCredentials(serverURL: String, username: String) {
+    public func restoreCredentials(serverURL: String, username: String, folderPath: String = "") {
         guard !serverURL.isEmpty, !username.isEmpty else {
             transport = nil
             coordinator?.configure(transport: nil)
@@ -79,7 +89,12 @@ public final class WebDAVSyncService: ObservableObject {
                 isConfigured = false
                 return
             }
-            try configureTransport(serverURL: serverURL, username: username, password: password)
+            try configureTransport(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                folderPath: folderPath
+            )
         } catch {
             transport = nil
             coordinator?.configure(transport: nil)
@@ -91,6 +106,7 @@ public final class WebDAVSyncService: ObservableObject {
     public func migrateLegacyPasswordIfNeeded(
         serverURL: String,
         username: String,
+        folderPath: String = "",
         defaults: UserDefaults = .standard
     ) {
         guard let legacyPassword = defaults.string(forKey: "webdav_password"),
@@ -102,7 +118,12 @@ public final class WebDAVSyncService: ObservableObject {
         do {
             try keychain.setPassword(legacyPassword, username: username, serverURL: serverURL)
             defaults.removeObject(forKey: "webdav_password")
-            try configureTransport(serverURL: serverURL, username: username, password: legacyPassword)
+            try configureTransport(
+                serverURL: serverURL,
+                username: username,
+                password: legacyPassword,
+                folderPath: folderPath
+            )
         } catch {
             configurationError = localizedMessage(for: error)
         }
@@ -129,11 +150,17 @@ public final class WebDAVSyncService: ObservableObject {
         await syncNow()
     }
 
-    private func configureTransport(serverURL: String, username: String, password: String) throws {
+    private func configureTransport(
+        serverURL: String,
+        username: String,
+        password: String,
+        folderPath: String
+    ) throws {
         transport = try WebDAVTransport(
             serverURL: serverURL,
             username: username,
-            password: password
+            password: password,
+            folderPath: folderPath
         )
         coordinator?.configure(transport: transport)
         isConfigured = true

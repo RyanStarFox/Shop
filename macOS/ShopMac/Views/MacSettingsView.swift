@@ -9,6 +9,7 @@ struct MacSettingsView: View {
 
     @AppStorage("webdav_server") private var webdavServer = ""
     @AppStorage("webdav_username") private var webdavUsername = ""
+    @AppStorage("webdav_path") private var webdavPath = ""
     @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
     @State private var webdavPassword = ""
     @State private var webdavSyncTask: Task<Void, Never>?
@@ -41,6 +42,7 @@ struct MacSettingsView: View {
 
             WebDAVSettingsTab(
                 server: $webdavServer,
+                folderPath: $webdavPath,
                 username: $webdavUsername,
                 password: $webdavPassword,
                 isConfigured: webdavSync.isConfigured,
@@ -60,16 +62,18 @@ struct MacSettingsView: View {
                     Label(ShopStrings.tags, systemImage: "tag")
                 }
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 460)
         .tint(ShopTheme.naturalGreen)
         .onAppear {
             webdavSync.migrateLegacyPasswordIfNeeded(
                 serverURL: webdavServer,
-                username: webdavUsername
+                username: webdavUsername,
+                folderPath: webdavPath
             )
             webdavSync.restoreCredentials(
                 serverURL: webdavServer,
-                username: webdavUsername
+                username: webdavUsername,
+                folderPath: webdavPath
             )
         }
         .onDisappear {
@@ -84,7 +88,8 @@ struct MacSettingsView: View {
                 try webdavSync.saveCredentials(
                     serverURL: webdavServer,
                     username: webdavUsername,
-                    password: webdavPassword
+                    password: webdavPassword,
+                    folderPath: webdavPath
                 )
                 webdavPassword = ""
                 await syncCoordinator.syncNow()
@@ -99,6 +104,7 @@ struct MacSettingsView: View {
 
 private struct WebDAVSettingsTab: View {
     @Binding var server: String
+    @Binding var folderPath: String
     @Binding var username: String
     @Binding var password: String
     let isConfigured: Bool
@@ -112,6 +118,11 @@ private struct WebDAVSettingsTab: View {
             Section {
                 TextField(ShopStrings.webdavServer, text: $server)
                     .textFieldStyle(.roundedBorder)
+                TextField(ShopStrings.webdavFolderPath, text: $folderPath)
+                    .textFieldStyle(.roundedBorder)
+                Text(ShopStrings.webdavFolderPathHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 TextField(ShopStrings.webdavUsername, text: $username)
                     .textFieldStyle(.roundedBorder)
                 SecureField(ShopStrings.webdavPassword, text: $password)

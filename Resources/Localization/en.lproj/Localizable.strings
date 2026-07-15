@@ -34,6 +34,8 @@
 "settings.webdav_server" = "Server URL";
 "settings.webdav_username" = "Username";
 "settings.webdav_password" = "Password";
+"settings.webdav_folder" = "Folder path";
+"settings.webdav_folder_hint" = "e.g. remote.php/dav/files/username/Shop (optional)";
 "settings.sync_now" = "Sync Now";
 "settings.language" = "Language";
 "settings.appearance" = "Appearance";

@@ -34,6 +34,8 @@
 "settings.webdav_server" = "服务器地址";
 "settings.webdav_username" = "用户名";
 "settings.webdav_password" = "密码";
+"settings.webdav_folder" = "文件夹路径";
+"settings.webdav_folder_hint" = "例如 remote.php/dav/files/用户名/Shop，可留空";
 "settings.sync_now" = "立即同步";
 "settings.language" = "语言";
 "settings.appearance" = "外观";

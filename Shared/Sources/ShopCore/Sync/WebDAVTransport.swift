@@ -52,20 +52,15 @@ public final class WebDAVTransport: WebDAVTransporting, @unchecked Sendable {
         serverURL: String,
         username: String,
         password: String,
+        folderPath: String = "",
         session: URLSession = .shared,
         allowsInsecureHTTP: Bool = false
     ) throws {
-        guard let serverURL = URL(string: serverURL),
-              let scheme = serverURL.scheme?.lowercased(),
-              serverURL.host != nil,
-              scheme == "https" || scheme == "http" else {
-            throw WebDAVError.invalidURL
-        }
-        guard scheme == "https" || allowsInsecureHTTP else {
-            throw WebDAVError.insecureURL
-        }
-
-        self.fileURL = serverURL.appendingPathComponent("shop_sync.json", isDirectory: false)
+        self.fileURL = try Self.makeSyncFileURL(
+            serverURL: serverURL,
+            folderPath: folderPath,
+            allowsInsecureHTTP: allowsInsecureHTTP
+        )
         self.authorizationHeader = Self.makeAuthorizationHeader(username: username, password: password)
         self.session = session
 
@@ -76,6 +71,48 @@ public final class WebDAVTransport: WebDAVTransporting, @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         self.decoder = decoder
+    }
+
+    /// Builds `…/folder/shop_sync.json` from a base server URL and optional folder path.
+    public static func makeSyncFileURL(
+        serverURL: String,
+        folderPath: String = "",
+        allowsInsecureHTTP: Bool = false
+    ) throws -> URL {
+        var normalizedServer = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedServer.isEmpty else {
+            throw WebDAVError.invalidURL
+        }
+        if !normalizedServer.hasSuffix("/") {
+            normalizedServer += "/"
+        }
+
+        var normalizedFolder = folderPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        while normalizedFolder.hasPrefix("/") {
+            normalizedFolder.removeFirst()
+        }
+        while normalizedFolder.hasSuffix("/") {
+            normalizedFolder.removeLast()
+        }
+
+        let directoryURLString: String
+        if normalizedFolder.isEmpty {
+            directoryURLString = normalizedServer
+        } else {
+            directoryURLString = normalizedServer + normalizedFolder + "/"
+        }
+
+        guard let directoryURL = URL(string: directoryURLString),
+              let scheme = directoryURL.scheme?.lowercased(),
+              directoryURL.host != nil,
+              scheme == "https" || scheme == "http" else {
+            throw WebDAVError.invalidURL
+        }
+        guard scheme == "https" || allowsInsecureHTTP else {
+            throw WebDAVError.insecureURL
+        }
+
+        return directoryURL.appendingPathComponent("shop_sync.json", isDirectory: false)
     }
 
     public func fetch() async throws -> RemoteSnapshot? {

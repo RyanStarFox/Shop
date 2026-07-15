@@ -37,6 +37,25 @@ final class WebDAVTransportTests: XCTestCase {
         XCTAssertEqual(remote?.etag, "\"v3\"")
     }
 
+    func testFolderPathIsJoinedBeforeFileName() throws {
+        let url = try WebDAVTransport.makeSyncFileURL(
+            serverURL: "https://cloud.example.com",
+            folderPath: "/remote.php/dav/files/alice/Shop/"
+        )
+        XCTAssertEqual(
+            url.absoluteString,
+            "https://cloud.example.com/remote.php/dav/files/alice/Shop/shop_sync.json"
+        )
+    }
+
+    func testEmptyFolderPathKeepsFileAtServerRoot() throws {
+        let url = try WebDAVTransport.makeSyncFileURL(
+            serverURL: "https://dav.example.com/webdav",
+            folderPath: "  "
+        )
+        XCTAssertEqual(url.absoluteString, "https://dav.example.com/webdav/shop_sync.json")
+    }
+
     func testFetchReturnsNilForNotFound() async throws {
         StubURLProtocol.handler = { request in
             (.http(status: 404, url: try XCTUnwrap(request.url)), Data())

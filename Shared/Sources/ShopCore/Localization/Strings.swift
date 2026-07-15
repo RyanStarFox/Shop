@@ -195,6 +195,15 @@ public enum ShopStrings {
     public static var webdavPassword: String {
         NSLocalizedString("settings.webdav_password", comment: "Password")
     }
+    public static var webdavFolderPath: String {
+        NSLocalizedString("settings.webdav_folder", comment: "WebDAV folder path")
+    }
+    public static var webdavFolderPathHint: String {
+        NSLocalizedString(
+            "settings.webdav_folder_hint",
+            comment: "Hint for WebDAV folder path field"
+        )
+    }
     public static var syncNow: String {
         NSLocalizedString("settings.sync_now", comment: "Sync Now")
     }
