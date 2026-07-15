@@ -137,19 +137,65 @@ final class ItemListLayoutTests: XCTestCase {
                 searchIsActive: true
             )
         )
+        XCTAssertFalse(
+            ItemListReorderPolicy.canReorder(
+                filter: .all,
+                selectedTags: [],
+                dateRange: nil,
+                groupOption: .byTagSet
+            )
+        )
+    }
+
+    func testGroupByTagSetKeepsIdenticalTagSetsTogether() {
+        let fruit = Tag(name: "Fruit", colorHex: "#34C759")
+        let milk = makeItem(name: "Milk", completed: false, order: 0, tags: [fruit])
+        let yogurt = makeItem(name: "Yogurt", completed: false, order: 1, tags: [fruit])
+        let bread = makeItem(name: "Bread", completed: false, order: 2)
+
+        let sections = ItemListSections.derive(
+            from: [milk, yogurt, bread],
+            groupOption: .byTagSet
+        )
+
+        XCTAssertEqual(sections.activeGroups.count, 2)
+        XCTAssertEqual(
+            sections.activeGroups.first { $0.title == "Fruit" }?.itemIDs,
+            [milk.id, yogurt.id]
+        )
+        XCTAssertEqual(
+            sections.activeGroups.first { $0.title == ShopStrings.noTags }?.itemIDs,
+            [bread.id]
+        )
+    }
+
+    func testGroupByEachTagDuplicatesMultiTagItems() {
+        let fruit = Tag(name: "Fruit", colorHex: "#34C759")
+        let sale = Tag(name: "Sale", colorHex: "#FF3B30")
+        let apple = makeItem(name: "Apple", completed: false, order: 0, tags: [fruit, sale])
+
+        let sections = ItemListSections.derive(
+            from: [apple],
+            groupOption: .byEachTag
+        )
+
+        XCTAssertEqual(sections.activeGroups.count, 2)
+        XCTAssertTrue(sections.activeGroups.allSatisfy { $0.itemIDs == [apple.id] })
     }
 
     private func makeItem(
         name: String,
         completed: Bool,
-        order: Int
+        order: Int,
+        tags: [Tag] = []
     ) -> ShoppingItem {
         ShoppingItem(
             name: name,
             isCompleted: completed,
             createdAt: Date(timeIntervalSince1970: TimeInterval(order)),
             completedAt: completed ? Date(timeIntervalSince1970: TimeInterval(order)) : nil,
-            sortOrder: order
+            sortOrder: order,
+            tags: tags
         )
     }
 }

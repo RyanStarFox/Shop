@@ -28,9 +28,6 @@ struct MacContentView: View {
         .navigationSplitViewStyle(.balanced)
         .tint(ShopTheme.naturalGreen)
         .background(VisualEffectView(material: .windowBackground, blendingMode: .behindWindow))
-        .overlay(alignment: .bottom) {
-            MacUndoBanner(undoCoordinator: undoCoordinator)
-        }
         .onDeleteCommand(perform: deleteSelectedItem)
         .background {
             Group {
@@ -145,6 +142,51 @@ struct MacContentView: View {
             statusBar
         }
         .navigationTitle(listTitle)
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    performUndo()
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .disabled(undoCoordinator.currentAction == nil)
+                .help(ShopStrings.undo)
+                .accessibilityLabel(ShopStrings.undo)
+                .accessibilityValue(undoCoordinator.currentAction?.message ?? "")
+
+                Menu {
+                    Section(ShopStrings.sort) {
+                        ForEach(DataStore.SortOption.allCases, id: \.self) { option in
+                            Button {
+                                dataStore.sortOption = option
+                            } label: {
+                                if dataStore.sortOption == option {
+                                    Label(option.macTitle, systemImage: "checkmark")
+                                } else {
+                                    Text(option.macTitle)
+                                }
+                            }
+                        }
+                    }
+                    Section(ShopStrings.group) {
+                        ForEach(DataStore.GroupOption.allCases, id: \.self) { option in
+                            Button {
+                                dataStore.groupOption = option
+                            } label: {
+                                if dataStore.groupOption == option {
+                                    Label(option.macTitle, systemImage: "checkmark")
+                                } else {
+                                    Text(option.macTitle)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down.circle")
+                }
+                .help("\(ShopStrings.sort) / \(ShopStrings.group)")
+            }
+        }
     }
 
     private var searchBar: some View {
@@ -334,11 +376,17 @@ struct MacContentView: View {
     }
 
     private func toggleCompletion(_ item: ShoppingItem) {
+        let willComplete = !item.isCompleted
         dataStore.setCompleted(
             item,
-            completed: !item.isCompleted,
+            completed: willComplete,
             presentUndo: undoCoordinator.present
         )
+        if willComplete {
+            ShopHaptics.itemCompleted()
+        } else {
+            ShopHaptics.itemRestored()
+        }
     }
 
     private func deleteItem(_ item: ShoppingItem) {
@@ -356,6 +404,14 @@ struct MacContentView: View {
     private func triggerSync() {
         guard webdavSync.isConfigured, !syncCoordinator.status.isSyncing else { return }
         Task { await syncCoordinator.syncNow() }
+    }
+
+    private func performUndo() {
+        do {
+            try undoCoordinator.undo()
+        } catch {
+            // Undo failures surface through the data store error state.
+        }
     }
 
     private func filterLabel(for option: DataStore.FilterOption) -> String {
@@ -394,7 +450,10 @@ private struct MacItemListView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var sections: ItemListSections {
-        ItemListSections.derive(from: filteredItems)
+        ItemListSections.derive(
+            from: filteredItems,
+            groupOption: dataStore.groupOption
+        )
     }
 
     private var canReorder: Bool {
@@ -403,7 +462,8 @@ private struct MacItemListView: View {
             selectedTags: dataStore.selectedTags,
             dateRange: dataStore.dateRange,
             searchIsActive: searchIsActive,
-            sortOption: dataStore.sortOption
+            sortOption: dataStore.sortOption,
+            groupOption: dataStore.groupOption
         )
     }
 
@@ -413,7 +473,23 @@ private struct MacItemListView: View {
 
     var body: some View {
         List(selection: $selectedItemID) {
-            if !sections.activeIDs.isEmpty {
+            if sections.isGrouped {
+                ForEach(sections.activeGroups) { group in
+                    Section {
+                        ForEach(group.itemIDs, id: \.self) { itemID in
+                            if let item = itemLookup[itemID] {
+                                row(for: item)
+                                    .tag(itemID)
+                            }
+                        }
+                    } header: {
+                        Text(group.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
+                    }
+                }
+            } else if !sections.activeIDs.isEmpty {
                 Section {
                     activeRows
                 }
@@ -461,6 +537,26 @@ private struct MacItemListView: View {
             isSelected: selectedItemID == item.id,
             onToggleCompletion: { onToggleCompletion(item) }
         )
+        // 左滑（trailing）：删除
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                onDeleteItem(item)
+            } label: {
+                Label(ShopStrings.deleteItem, systemImage: "trash")
+            }
+        }
+        // 右滑（leading）：完成/恢复
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                onToggleCompletion(item)
+            } label: {
+                Label(
+                    item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete,
+                    systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
+                )
+            }
+            .tint(ShopTheme.brandRed)
+        }
         .contextMenu {
             Button(role: .destructive) {
                 onDeleteItem(item)
@@ -492,7 +588,7 @@ private struct MacItemRow: View {
 
             VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
                 Text(item.name)
-                    .font(.body)
+                    .font(.body.weight(.semibold))
                     .foregroundStyle(item.isCompleted ? .secondary : .primary)
                     .strikethrough(item.isCompleted, color: .secondary)
                     .lineLimit(2)
@@ -679,53 +775,6 @@ private struct MacItemDetailView: View {
     }
 }
 
-// MARK: - Undo Banner
-
-struct MacUndoBanner: View {
-    @ObservedObject var undoCoordinator: UndoCoordinator
-    @State private var undoError: String?
-
-    var body: some View {
-        if let action = undoCoordinator.currentAction {
-            HStack(spacing: ShopTheme.spacingSM) {
-                Text(action.message)
-                    .font(.subheadline)
-                    .lineLimit(2)
-
-                Spacer(minLength: ShopTheme.spacingSM)
-
-                Button(ShopStrings.undo) {
-                    performUndo()
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(ShopTheme.naturalGreen)
-            }
-            .padding(.horizontal, ShopTheme.spacingMD)
-            .padding(.vertical, ShopTheme.spacingSM)
-            .macGlassSurface(in: RoundedRectangle(cornerRadius: ShopTheme.rowCornerRadius, style: .continuous))
-            .padding(.horizontal, ShopTheme.spacingMD)
-            .padding(.bottom, ShopTheme.spacingSM)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-            .alert(ShopStrings.undo, isPresented: Binding(
-                get: { undoError != nil },
-                set: { if !$0 { undoError = nil } }
-            )) {
-                Button(ShopStrings.dismiss, role: .cancel) {}
-            } message: {
-                Text(undoError ?? "")
-            }
-        }
-    }
-
-    private func performUndo() {
-        do {
-            try undoCoordinator.undo()
-        } catch {
-            undoError = error.localizedDescription
-        }
-    }
-}
-
 // MARK: - Glass + Visual Effect
 
 private extension View {
@@ -762,3 +811,26 @@ struct VisualEffectView: NSViewRepresentable {
     }
 }
 #endif
+
+private extension DataStore.SortOption {
+    var macTitle: String {
+        switch self {
+        case .manual: ShopStrings.sortManual
+        case .createdNewest: ShopStrings.sortCreatedNewest
+        case .createdOldest: ShopStrings.sortCreatedOldest
+        case .nameAscending: ShopStrings.sortNameAscending
+        case .nameDescending: ShopStrings.sortNameDescending
+        }
+    }
+}
+
+private extension DataStore.GroupOption {
+    var macTitle: String {
+        switch self {
+        case .none: ShopStrings.groupNone
+        case .byTagSet: ShopStrings.groupByTagSet
+        case .byPrimaryTag: ShopStrings.groupByPrimaryTag
+        case .byEachTag: ShopStrings.groupByEachTag
+        }
+    }
+}

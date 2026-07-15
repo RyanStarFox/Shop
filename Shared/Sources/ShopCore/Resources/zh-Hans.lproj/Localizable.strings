@@ -10,6 +10,7 @@
 "appearance.light" = "浅色";
 "app.tagline" = "适用于 iPhone、Mac 与 Apple Watch 的购物清单";
 "app.version" = "Shop! v1.0.0";
+"about.github" = "GitHub：RyanStarFox/Shop";
 "item.archive_section" = "归档";
 "item.added_at" = "添加";
 "item.completed_at" = "完成";
@@ -19,6 +20,12 @@
 "sort.created_oldest" = "时间从旧到新";
 "sort.name_ascending" = "名称 A–Z";
 "sort.name_descending" = "名称 Z–A";
+"group.title" = "分组";
+"group.none" = "不分组";
+"group.by_tag_set" = "相同标签组合";
+"group.by_primary_tag" = "主标签";
+"group.by_each_tag" = "每个标签";
+"item.dates_section" = "日期";
 "tag.custom_color" = "自定义";
 
 /* Shopping store errors */

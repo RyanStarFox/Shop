@@ -66,34 +66,53 @@ struct ContentView: View {
                             .accessibilityLabel(ShopStrings.filter)
 
                             Menu {
-                                ForEach(DataStore.SortOption.allCases, id: \.self) { option in
-                                    Button {
-                                        dataStore.sortOption = option
-                                    } label: {
-                                        if dataStore.sortOption == option {
-                                            Label(option.title, systemImage: "checkmark")
-                                        } else {
-                                            Text(option.title)
+                                Section(ShopStrings.sort) {
+                                    ForEach(DataStore.SortOption.allCases, id: \.self) { option in
+                                        Button {
+                                            dataStore.sortOption = option
+                                        } label: {
+                                            if dataStore.sortOption == option {
+                                                Label(option.title, systemImage: "checkmark")
+                                            } else {
+                                                Text(option.title)
+                                            }
+                                        }
+                                    }
+                                }
+                                Section(ShopStrings.group) {
+                                    ForEach(DataStore.GroupOption.allCases, id: \.self) { option in
+                                        Button {
+                                            dataStore.groupOption = option
+                                        } label: {
+                                            if dataStore.groupOption == option {
+                                                Label(option.title, systemImage: "checkmark")
+                                            } else {
+                                                Text(option.title)
+                                            }
                                         }
                                     }
                                 }
                             } label: {
                                 Image(systemName: "arrow.up.arrow.down.circle")
-                                    .symbolVariant(dataStore.sortOption == .manual ? .none : .fill)
+                                    .symbolVariant(
+                                        dataStore.sortOption == .manual && dataStore.groupOption == .none
+                                            ? .none
+                                            : .fill
+                                    )
                             }
-                            .accessibilityLabel(ShopStrings.sort)
+                            .accessibilityLabel("\(ShopStrings.sort), \(ShopStrings.group)")
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         HStack(spacing: ShopTheme.spacingSM) {
-                            if undoCoordinator.currentAction != nil {
-                                Button(ShopStrings.undo) {
-                                    performUndo()
-                                }
-                                .fontWeight(.semibold)
-                                .accessibilityLabel(ShopStrings.undo)
-                                .accessibilityValue(undoCoordinator.currentAction?.message ?? "")
+                            Button {
+                                performUndo()
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward")
                             }
+                            .disabled(undoCoordinator.currentAction == nil)
+                            .accessibilityLabel(ShopStrings.undo)
+                            .accessibilityValue(undoCoordinator.currentAction?.message ?? "")
 
                             Button {
                                 showSettings.toggle()
@@ -185,6 +204,17 @@ private extension DataStore.SortOption {
         case .createdOldest: ShopStrings.sortCreatedOldest
         case .nameAscending: ShopStrings.sortNameAscending
         case .nameDescending: ShopStrings.sortNameDescending
+        }
+    }
+}
+
+private extension DataStore.GroupOption {
+    var title: String {
+        switch self {
+        case .none: ShopStrings.groupNone
+        case .byTagSet: ShopStrings.groupByTagSet
+        case .byPrimaryTag: ShopStrings.groupByPrimaryTag
+        case .byEachTag: ShopStrings.groupByEachTag
         }
     }
 }

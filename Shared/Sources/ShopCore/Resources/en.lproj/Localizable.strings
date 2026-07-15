@@ -10,6 +10,7 @@
 "appearance.light" = "Light";
 "app.tagline" = "A shopping list for iPhone, Mac, and Apple Watch";
 "app.version" = "Shop! v1.0.0";
+"about.github" = "GitHub: RyanStarFox/Shop";
 "item.archive_section" = "Archive";
 "item.added_at" = "Added";
 "item.completed_at" = "Completed";
@@ -19,6 +20,12 @@
 "sort.created_oldest" = "Oldest first";
 "sort.name_ascending" = "Name A–Z";
 "sort.name_descending" = "Name Z–A";
+"group.title" = "Group";
+"group.none" = "No grouping";
+"group.by_tag_set" = "Identical tags";
+"group.by_primary_tag" = "Primary tag";
+"group.by_each_tag" = "Each tag";
+"item.dates_section" = "Dates";
 "tag.custom_color" = "Custom";
 
 /* Shopping store errors */

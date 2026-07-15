@@ -179,6 +179,20 @@ struct SettingsView: View {
                                 Text(ShopStrings.appTagline)
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
+
+                                Link(destination: ShopLinks.githubRepository) {
+                                    HStack(spacing: ShopTheme.spacingXS) {
+                                        Image(systemName: "link")
+                                            .font(.caption)
+                                        Text(ShopStrings.githubRepository)
+                                            .font(.subheadline)
+                                        Spacer(minLength: 0)
+                                        Image(systemName: "arrow.up.right")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(ShopTheme.brandRed)
+                                }
+                                .accessibilityLabel(ShopStrings.githubRepository)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }

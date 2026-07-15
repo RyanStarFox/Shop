@@ -17,7 +17,23 @@ struct ItemEditorView: View {
     @State private var createdAt = Date()
     @State private var completedAt = Date()
     @State private var showDiscardConfirmation = false
+    @State private var newTagName = ""
+    @State private var newTagColor = "#E0312C"
     @FocusState private var isNameFocused: Bool
+    @FocusState private var isNewTagFocused: Bool
+
+    private let presetColors: [(String, Color)] = [
+        ("#007AFF", .blue),
+        ("#34C759", .green),
+        ("#FF9500", .orange),
+        ("#FF3B30", .red),
+        ("#AF52DE", .purple),
+        ("#FF2D55", .pink),
+        ("#5856D6", .indigo),
+        ("#00C7BE", .teal),
+        ("#FFD60A", .yellow),
+        ("#8E8E93", .gray)
+    ]
 
     private var editingItem: ShoppingItem? {
         if case .edit(let item) = mode { return item }
@@ -65,6 +81,20 @@ struct ItemEditorView: View {
         }
     }
 
+    private var datesSummary: String {
+        var parts = ["\(ShopStrings.addedAt) \(createdAt.formatted(date: .abbreviated, time: .omitted))"]
+        if editingItem?.isCompleted == true {
+            parts.append(
+                "\(ShopStrings.completedAtLabel) \(completedAt.formatted(date: .abbreviated, time: .omitted))"
+            )
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var canAddTag: Bool {
+        !newTagName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -75,49 +105,111 @@ struct ItemEditorView: View {
                         .accessibilityLabel(ShopStrings.itemName)
                 }
 
-                if case .edit = mode {
-                    Section {
-                        DatePicker(
-                            ShopStrings.addedAt,
-                            selection: $createdAt,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                        if editingItem?.isCompleted == true {
-                            DatePicker(
-                                ShopStrings.completedAtLabel,
-                                selection: $completedAt,
-                                displayedComponents: [.date, .hourAndMinute]
-                            )
+                Section(ShopStrings.tags) {
+                    ForEach(dataStore.tags) { tag in
+                        Button {
+                            toggleTag(tag.id)
+                        } label: {
+                            HStack(spacing: ShopTheme.spacingSM) {
+                                Circle()
+                                    .fill(tag.displayColor)
+                                    .frame(width: 10, height: 10)
+                                Text(tag.name)
+                                    .foregroundStyle(.primary)
+                                Spacer(minLength: 0)
+                                if selectedTags.contains(tag.id) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(ShopTheme.brandRed)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: ShopTheme.minTouchTarget, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(
+                            selectedTags.contains(tag.id) ? .isSelected : []
+                        )
+                        .accessibilityLabel(tag.name)
                     }
+
+                    VStack(alignment: .leading, spacing: ShopTheme.spacingSM) {
+                        TextField(ShopStrings.tagName, text: $newTagName)
+                            .focused($isNewTagFocused)
+                            .textInputAutocapitalization(.words)
+                            .accessibilityLabel(ShopStrings.tagName)
+
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
+                            spacing: 10
+                        ) {
+                            ForEach(presetColors.dropLast(), id: \.0) { hex, color in
+                                Button {
+                                    newTagColor = hex
+                                } label: {
+                                    Circle()
+                                        .fill(color.gradient)
+                                        .frame(width: 32, height: 32)
+                                        .overlay {
+                                            if newTagColor == hex {
+                                                Circle()
+                                                    .stroke(.primary, lineWidth: 2)
+                                                    .frame(width: 36, height: 36)
+                                            }
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(hex)
+                            }
+
+                            ColorPicker(
+                                selection: customColorBinding(for: $newTagColor),
+                                supportsOpacity: false
+                            ) {
+                                EmptyView()
+                            }
+                            .labelsHidden()
+                            .frame(width: 32, height: 32)
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [3]))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .accessibilityLabel(ShopStrings.customColor)
+                        }
+
+                        Button {
+                            addNewTag()
+                        } label: {
+                            Label(ShopStrings.addTag, systemImage: "plus.tag")
+                                .frame(maxWidth: .infinity, minHeight: ShopTheme.minTouchTarget)
+                        }
+                        .disabled(!canAddTag)
+                    }
+                    .padding(.vertical, ShopTheme.spacingXS)
                 }
 
-                if !dataStore.tags.isEmpty {
-                    Section(ShopStrings.tags) {
-                        ForEach(dataStore.tags) { tag in
-                            Button {
-                                toggleTag(tag.id)
-                            } label: {
-                                HStack(spacing: ShopTheme.spacingSM) {
-                                    Circle()
-                                        .fill(tag.displayColor)
-                                        .frame(width: 10, height: 10)
-                                    Text(tag.name)
-                                        .foregroundStyle(.primary)
-                                    Spacer(minLength: 0)
-                                    if selectedTags.contains(tag.id) {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(ShopTheme.brandRed)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, minHeight: ShopTheme.minTouchTarget, alignment: .leading)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(
-                                selectedTags.contains(tag.id) ? .isSelected : []
+                if case .edit = mode {
+                    Section {
+                        DisclosureGroup {
+                            DatePicker(
+                                ShopStrings.addedAt,
+                                selection: $createdAt,
+                                displayedComponents: [.date, .hourAndMinute]
                             )
-                            .accessibilityLabel(tag.name)
+                            if editingItem?.isCompleted == true {
+                                DatePicker(
+                                    ShopStrings.completedAtLabel,
+                                    selection: $completedAt,
+                                    displayedComponents: [.date, .hourAndMinute]
+                                )
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(ShopStrings.datesSection)
+                                Text(datesSummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -185,6 +277,29 @@ struct ItemEditorView: View {
         } else {
             selectedTags.insert(id)
         }
+    }
+
+    private func addNewTag() {
+        let name = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        dataStore.addTag(name: name, colorHex: newTagColor)
+        if let created = dataStore.tags.first(where: { $0.name == name }) {
+            selectedTags.insert(created.id)
+        }
+        newTagName = ""
+        newTagColor = "#E0312C"
+        isNewTagFocused = false
+    }
+
+    private func customColorBinding(for hex: Binding<String>) -> Binding<Color> {
+        Binding(
+            get: { Color(shopHex: hex.wrappedValue) ?? ShopTheme.brandRed },
+            set: { color in
+                if let value = color.shopHexString {
+                    hex.wrappedValue = value
+                }
+            }
+        )
     }
 
     private func save() {

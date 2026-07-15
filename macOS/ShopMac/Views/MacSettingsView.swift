@@ -52,9 +52,6 @@ struct MacSettingsView: View {
         }
         .frame(width: 480, height: 420)
         .tint(ShopTheme.naturalGreen)
-        .overlay(alignment: .bottom) {
-            MacUndoBanner(undoCoordinator: undoCoordinator)
-        }
         .onAppear {
             webdavSync.migrateLegacyPasswordIfNeeded(
                 serverURL: webdavServer,

@@ -53,7 +53,7 @@ struct WatchContentView: View {
             .listStyle(.plain)
             .navigationTitle(ShopStrings.appName)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         showAddSheet = true
                     } label: {
@@ -80,6 +80,15 @@ struct WatchContentView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+            Button {
+                showAddSheet = true
+            } label: {
+                Label(ShopStrings.addItem, systemImage: "plus")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(ShopTheme.brandRed)
+            .accessibilityLabel(ShopStrings.addItem)
         }
         .frame(maxWidth: .infinity)
         .listRowBackground(Color.clear)
@@ -125,7 +134,7 @@ struct WatchContentView: View {
 
             VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
                 Text(item.name)
-                    .font(.body)
+                    .font(.body.weight(.semibold))
                     .foregroundStyle(item.isCompleted ? .secondary : .primary)
                     .strikethrough(item.isCompleted, color: .secondary)
                     .lineLimit(2)
@@ -146,6 +155,26 @@ struct WatchContentView: View {
                 .fill(.ultraThinMaterial)
                 .padding(2)
         )
+        // 左滑（trailing）：删除
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                deleteItem(item)
+            } label: {
+                Label(ShopStrings.deleteItem, systemImage: "trash")
+            }
+        }
+        // 右滑（leading）：完成/恢复
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                toggleCompletion(for: item)
+            } label: {
+                Label(
+                    item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete,
+                    systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
+                )
+            }
+            .tint(ShopTheme.brandRed)
+        }
     }
 
     private func itemAccessibilityLabel(for item: ShoppingItem) -> String {
@@ -167,9 +196,15 @@ struct WatchContentView: View {
             )
         }
         if willComplete {
-            WKInterfaceDevice.current().play(.success)
+            ShopHaptics.itemCompleted()
         } else {
-            WKInterfaceDevice.current().play(.click)
+            ShopHaptics.itemRestored()
+        }
+    }
+
+    private func deleteItem(_ item: ShoppingItem) {
+        withAnimation(reduceMotion ? nil : .default) {
+            dataStore.deleteItem(item, presentUndo: { _ in })
         }
     }
 }

@@ -64,6 +64,24 @@ public enum ShopStrings {
     public static var sortNameDescending: String {
         NSLocalizedString("sort.name_descending", bundle: .module, comment: "Name Z to A")
     }
+    public static var group: String {
+        NSLocalizedString("group.title", bundle: .module, comment: "Group")
+    }
+    public static var groupNone: String {
+        NSLocalizedString("group.none", bundle: .module, comment: "No grouping")
+    }
+    public static var groupByTagSet: String {
+        NSLocalizedString("group.by_tag_set", bundle: .module, comment: "Group by identical tags")
+    }
+    public static var groupByPrimaryTag: String {
+        NSLocalizedString("group.by_primary_tag", bundle: .module, comment: "Group by primary tag")
+    }
+    public static var groupByEachTag: String {
+        NSLocalizedString("group.by_each_tag", bundle: .module, comment: "Group by each tag")
+    }
+    public static var datesSection: String {
+        NSLocalizedString("item.dates_section", bundle: .module, comment: "Dates section")
+    }
     public static var customColor: String {
         NSLocalizedString("tag.custom_color", bundle: .module, comment: "Custom color")
     }
@@ -175,6 +193,9 @@ public enum ShopStrings {
     }
     public static var appVersion: String {
         NSLocalizedString("app.version", bundle: .module, comment: "App version label")
+    }
+    public static var githubRepository: String {
+        NSLocalizedString("about.github", bundle: .module, comment: "GitHub repository")
     }
     public static var cancel: String {
         NSLocalizedString("common.cancel", bundle: .module, comment: "Cancel")

@@ -13,11 +13,24 @@ public final class DataStore: ObservableObject {
     @Published public var archivedItems: [ShoppingItem] = []
     @Published public var tags: [Tag] = []
     @Published public var lastError: ShoppingStoreError?
-    @Published public var selectedFilter: FilterOption = .all
-    @Published public var selectedTags: Set<UUID> = []
-    @Published public var dateRange: ClosedRange<Date>?
-    @Published public var sortOption: SortOption = .manual
+    @Published public var selectedFilter: FilterOption = .all {
+        didSet { persistListPreferences() }
+    }
+    @Published public var selectedTags: Set<UUID> = [] {
+        didSet { persistListPreferences() }
+    }
+    @Published public var dateRange: ClosedRange<Date>? {
+        didSet { persistListPreferences() }
+    }
+    @Published public var sortOption: SortOption = .manual {
+        didSet { persistListPreferences() }
+    }
+    @Published public var groupOption: GroupOption = .none {
+        didSet { persistListPreferences() }
+    }
     private var localMutationObservers: [UUID: () -> Void] = [:]
+    private let persistsPreferences: Bool
+    private var isRestoringPreferences = false
 
     public enum FilterOption: String, CaseIterable {
         case all
@@ -36,7 +49,19 @@ public final class DataStore: ObservableObject {
         case nameDescending
     }
 
+    public enum GroupOption: String, CaseIterable, Sendable {
+        /// Flat list (existing behavior).
+        case none
+        /// Items with the exact same tag set share a section.
+        case byTagSet
+        /// Group by the item's first tag; untitled items share one section.
+        case byPrimaryTag
+        /// One section per tag; multi-tag items appear in each matching section.
+        case byEachTag
+    }
+
     public init(inMemory: Bool = false, deviceID: String? = nil) {
+        persistsPreferences = !inMemory
         do {
             shoppingStore = try ShoppingStore(
                 inMemory: inMemory,
@@ -48,6 +73,7 @@ public final class DataStore: ObservableObject {
         modelContainer = shoppingStore.modelContainer
         modelContext = shoppingStore.modelContext
         fetchData()
+        restoreListPreferences()
     }
 
     public func fetchData() {
@@ -190,7 +216,8 @@ public final class DataStore: ObservableObject {
             filter: selectedFilter,
             selectedTags: selectedTags,
             dateRange: dateRange,
-            sortOption: sortOption
+            sortOption: sortOption,
+            groupOption: groupOption
         ) else {
             return
         }
@@ -348,6 +375,64 @@ public final class DataStore: ObservableObject {
         let generated = UUID().uuidString
         UserDefaults.standard.set(generated, forKey: key)
         return generated
+    }
+
+    // MARK: - List preferences
+
+    private enum PreferenceKey {
+        static let filter = "shop.list.filter"
+        static let sort = "shop.list.sort"
+        static let group = "shop.list.group"
+        static let selectedTags = "shop.list.selectedTags"
+        static let dateRangeStart = "shop.list.dateRange.start"
+        static let dateRangeEnd = "shop.list.dateRange.end"
+    }
+
+    private func restoreListPreferences() {
+        guard persistsPreferences else { return }
+        isRestoringPreferences = true
+        defer { isRestoringPreferences = false }
+
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: PreferenceKey.filter),
+           let value = FilterOption(rawValue: raw) {
+            selectedFilter = value
+        }
+        if let raw = defaults.string(forKey: PreferenceKey.sort),
+           let value = SortOption(rawValue: raw) {
+            sortOption = value
+        }
+        if let raw = defaults.string(forKey: PreferenceKey.group),
+           let value = GroupOption(rawValue: raw) {
+            groupOption = value
+        }
+        if let raw = defaults.array(forKey: PreferenceKey.selectedTags) as? [String] {
+            selectedTags = Set(raw.compactMap(UUID.init(uuidString:)))
+        }
+        if let start = defaults.object(forKey: PreferenceKey.dateRangeStart) as? Date,
+           let end = defaults.object(forKey: PreferenceKey.dateRangeEnd) as? Date,
+           start <= end {
+            dateRange = start...end
+        }
+    }
+
+    private func persistListPreferences() {
+        guard persistsPreferences, !isRestoringPreferences else { return }
+        let defaults = UserDefaults.standard
+        defaults.set(selectedFilter.rawValue, forKey: PreferenceKey.filter)
+        defaults.set(sortOption.rawValue, forKey: PreferenceKey.sort)
+        defaults.set(groupOption.rawValue, forKey: PreferenceKey.group)
+        defaults.set(
+            selectedTags.map(\.uuidString).sorted(),
+            forKey: PreferenceKey.selectedTags
+        )
+        if let dateRange {
+            defaults.set(dateRange.lowerBound, forKey: PreferenceKey.dateRangeStart)
+            defaults.set(dateRange.upperBound, forKey: PreferenceKey.dateRangeEnd)
+        } else {
+            defaults.removeObject(forKey: PreferenceKey.dateRangeStart)
+            defaults.removeObject(forKey: PreferenceKey.dateRangeEnd)
+        }
     }
 }
 

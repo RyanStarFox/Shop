@@ -11,7 +11,10 @@ struct ItemListView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var sections: ItemListSections {
-        ItemListSections.derive(from: filteredItems)
+        ItemListSections.derive(
+            from: filteredItems,
+            groupOption: dataStore.groupOption
+        )
     }
 
     private var canReorder: Bool {
@@ -20,7 +23,8 @@ struct ItemListView: View {
             selectedTags: dataStore.selectedTags,
             dateRange: dataStore.dateRange,
             searchIsActive: searchIsActive,
-            sortOption: dataStore.sortOption
+            sortOption: dataStore.sortOption,
+            groupOption: dataStore.groupOption
         )
     }
 
@@ -30,7 +34,23 @@ struct ItemListView: View {
 
     var body: some View {
         List {
-            if !sections.activeIDs.isEmpty {
+            if sections.isGrouped {
+                ForEach(sections.activeGroups) { group in
+                    Section {
+                        ForEach(group.itemIDs, id: \.self) { itemID in
+                            if let item = itemLookup[itemID] {
+                                itemRow(item)
+                            }
+                        }
+                    } header: {
+                        Text(group.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
+            } else if !sections.activeIDs.isEmpty {
                 Section {
                     activeRows
                 }
@@ -80,8 +100,16 @@ struct ItemListView: View {
         )
         .listRowBackground(Color.clear)
         .listRowSeparator(.visible)
-        // 左滑（trailing）：完成/恢复
+        // 左滑（trailing）：删除
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                deleteItem(item)
+            } label: {
+                Label(ShopStrings.deleteItem, systemImage: "trash")
+            }
+        }
+        // 右滑（leading）：完成/恢复
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 toggleCompletion(for: item)
             } label: {
@@ -92,23 +120,21 @@ struct ItemListView: View {
             }
             .tint(ShopTheme.brandRed)
         }
-        // 右滑（leading）：删除
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                deleteItem(item)
-            } label: {
-                Label(ShopStrings.deleteItem, systemImage: "trash")
-            }
-        }
     }
 
     private func toggleCompletion(for item: ShoppingItem) {
+        let willComplete = !item.isCompleted
         withAnimation(reduceMotion ? nil : .default) {
             dataStore.setCompleted(
                 item,
-                completed: !item.isCompleted,
+                completed: willComplete,
                 presentUndo: undoCoordinator.present
             )
+        }
+        if willComplete {
+            ShopHaptics.itemCompleted()
+        } else {
+            ShopHaptics.itemRestored()
         }
     }
 
@@ -145,7 +171,7 @@ struct ItemRow: View {
                 HStack(alignment: .top, spacing: ShopTheme.spacingSM) {
                     VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
                         Text(item.name)
-                            .font(.body)
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(item.isCompleted ? .secondary : .primary)
                             .strikethrough(item.isCompleted, color: .secondary)
                             .multilineTextAlignment(.leading)
