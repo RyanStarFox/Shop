@@ -27,6 +27,14 @@
 "group.by_each_tag" = "每个标签";
 "item.dates_section" = "日期";
 "tag.custom_color" = "自定义";
+"retention.title" = "数据保留";
+"retention.footer" = "超过该时间的已完成物品会移出归档；超过该时间的已删除记录会被永久清除，以节省存储空间。";
+"retention.one_week" = "1 周";
+"retention.one_month" = "1 个月";
+"retention.three_months" = "3 个月";
+"retention.six_months" = "6 个月";
+"retention.one_year" = "1 年";
+"retention.forever" = "永久";
 
 /* Shopping store errors */
 "error.store.container_creation_failed" = "创建购物数据存储失败：%@";

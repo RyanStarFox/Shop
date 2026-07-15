@@ -167,6 +167,26 @@ struct SettingsView: View {
                         }
                         .padding(.horizontal)
 
+                        // Data retention
+                        GlassCard {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Label(ShopStrings.dataRetention, systemImage: "internaldrive")
+                                    .font(.headline)
+
+                                Picker(ShopStrings.dataRetention, selection: $dataStore.dataRetention) {
+                                    ForEach(DataRetentionPolicy.allCases, id: \.self) { policy in
+                                        Text(policy.localizedTitle).tag(policy)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+
+                                Text(ShopStrings.dataRetentionFooter)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal)
+
                         // About
                         GlassCard {
                             VStack(alignment: .leading, spacing: 8) {

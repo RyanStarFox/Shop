@@ -85,6 +85,34 @@ public enum ShopStrings {
     public static var customColor: String {
         NSLocalizedString("tag.custom_color", bundle: .module, comment: "Custom color")
     }
+    public static var dataRetention: String {
+        NSLocalizedString("retention.title", bundle: .module, comment: "Data retention")
+    }
+    public static var dataRetentionFooter: String {
+        NSLocalizedString(
+            "retention.footer",
+            bundle: .module,
+            comment: "Explains prune of completed archives and tombstones"
+        )
+    }
+    public static var retentionOneWeek: String {
+        NSLocalizedString("retention.one_week", bundle: .module, comment: "One week")
+    }
+    public static var retentionOneMonth: String {
+        NSLocalizedString("retention.one_month", bundle: .module, comment: "One month")
+    }
+    public static var retentionThreeMonths: String {
+        NSLocalizedString("retention.three_months", bundle: .module, comment: "Three months")
+    }
+    public static var retentionSixMonths: String {
+        NSLocalizedString("retention.six_months", bundle: .module, comment: "Six months")
+    }
+    public static var retentionOneYear: String {
+        NSLocalizedString("retention.one_year", bundle: .module, comment: "One year")
+    }
+    public static var retentionForever: String {
+        NSLocalizedString("retention.forever", bundle: .module, comment: "Keep forever")
+    }
     public static func pendingCount(_ count: Int) -> String {
         String(
             format: NSLocalizedString("item.pending_count", comment: "Pending item count"),

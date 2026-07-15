@@ -1,6 +1,6 @@
 name: Shop
 options:
-  bundleIdPrefix: com.shop
+  bundleIdPrefix: com.ryanstarfox
   deploymentTarget:
     iOS: "18.0"
     watchOS: "11.0"
@@ -40,7 +40,7 @@ targets:
         type: group
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.shop.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryanstarfox.shop
         INFOPLIST_FILE: iOS/Shop/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_LANGUAGE: en
@@ -73,11 +73,11 @@ targets:
         type: group
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.shop.ios.watch
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryanstarfox.shop.watch
         INFOPLIST_FILE: watchOS/ShopWatch/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_LANGUAGE: en
-        WK_COMPANION_APP_BUNDLE_IDENTIFIER: com.shop.ios
+        WK_COMPANION_APP_BUNDLE_IDENTIFIER: com.ryanstarfox.shop
       configs:
         Debug:
           ENABLE_USER_SCRIPT_SANDBOXING: false
@@ -95,7 +95,7 @@ targets:
         type: group
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.shop.mac
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryanstarfox.shop.mac
         INFOPLIST_FILE: macOS/ShopMac/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_LANGUAGE: en

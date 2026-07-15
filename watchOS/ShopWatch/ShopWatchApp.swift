@@ -18,10 +18,12 @@ struct ShopWatchApp: App {
                 .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
                 .onAppear {
                     watchSync.configure(with: dataStore)
+                    dataStore.pruneExpiredData()
                     watchSync.requestLatestSnapshot()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
+                    dataStore.pruneExpiredData()
                     watchSync.requestLatestSnapshot()
                     watchSync.sendLatestSnapshot()
                 }

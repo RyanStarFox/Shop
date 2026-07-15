@@ -27,6 +27,14 @@
 "group.by_each_tag" = "Each tag";
 "item.dates_section" = "Dates";
 "tag.custom_color" = "Custom";
+"retention.title" = "Data retention";
+"retention.footer" = "Completed items older than this are removed from the archive. Soft-deleted items and tags older than this are permanently erased to free storage.";
+"retention.one_week" = "1 week";
+"retention.one_month" = "1 month";
+"retention.three_months" = "3 months";
+"retention.six_months" = "6 months";
+"retention.one_year" = "1 year";
+"retention.forever" = "Forever";
 
 /* Shopping store errors */
 "error.store.container_creation_failed" = "Unable to create the shopping store: %@";

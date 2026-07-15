@@ -237,6 +237,67 @@ public final class ShoppingStore {
         }
     }
 
+    /// Soft-deletes expired completed archives, then physically removes aged tombstones.
+    @discardableResult
+    public func pruneExpiredData(
+        retention: DataRetentionPolicy,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) throws -> DataPruneResult {
+        guard let cutoff = retention.cutoff(relativeTo: now, calendar: calendar) else {
+            return DataPruneResult()
+        }
+
+        var result = DataPruneResult()
+
+        for item in storedItems where item.deletedAt == nil && item.isCompleted {
+            let archiveDate = item.completedAt ?? item.createdAt
+            guard archiveDate < cutoff else { continue }
+            item.deletedAt = now
+            advanceVersion(of: item, now: now)
+            result.softDeletedItemCount += 1
+        }
+
+        let itemTombstones = storedItems.filter { item in
+            guard let deletedAt = item.deletedAt else { return false }
+            return deletedAt < cutoff
+        }
+        for item in itemTombstones {
+            modelContext.delete(item)
+            result.purgedItemCount += 1
+        }
+        if !itemTombstones.isEmpty {
+            let purgedIDs = Set(itemTombstones.map(\.id))
+            storedItems.removeAll { purgedIDs.contains($0.id) }
+        }
+
+        let tagTombstones = storedTags.filter { tag in
+            guard let deletedAt = tag.deletedAt else { return false }
+            return deletedAt < cutoff
+        }
+        for tag in tagTombstones {
+            modelContext.delete(tag)
+            result.purgedTagCount += 1
+        }
+        if !tagTombstones.isEmpty {
+            let purgedIDs = Set(tagTombstones.map(\.id))
+            storedTags.removeAll { purgedIDs.contains($0.id) }
+        }
+
+        guard result.didChange else { return result }
+
+        do {
+            try save()
+        } catch {
+            modelContext.rollback()
+            storedItems = (try? modelContext.fetch(FetchDescriptor<ShoppingItem>())) ?? storedItems
+            storedTags = (try? modelContext.fetch(FetchDescriptor<Tag>())) ?? storedTags
+            throw error
+        }
+
+        return result
+    }
+
     public func restoreItem(itemID: UUID, now: Date = Date()) throws {
         guard let item = item(id: itemID) else {
             throw ShoppingStoreError.itemNotFound(itemID)

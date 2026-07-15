@@ -46,9 +46,11 @@ struct ShopApp: App {
                         serverURL: webdavServer,
                         username: webdavUsername
                     )
+                    dataStore.pruneExpiredData()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
+                    dataStore.pruneExpiredData()
                     watchSync.requestLatestSnapshot()
                     watchSync.sendLatestSnapshot()
                 }

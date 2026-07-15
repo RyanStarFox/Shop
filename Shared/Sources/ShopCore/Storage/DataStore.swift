@@ -28,6 +28,14 @@ public final class DataStore: ObservableObject {
     @Published public var groupOption: GroupOption = .none {
         didSet { persistListPreferences() }
     }
+    @Published public var dataRetention: DataRetentionPolicy = .default {
+        didSet {
+            persistListPreferences()
+            if !isRestoringPreferences {
+                pruneExpiredData()
+            }
+        }
+    }
     private var localMutationObservers: [UUID: () -> Void] = [:]
     private let persistsPreferences: Bool
     private var isRestoringPreferences = false
@@ -74,6 +82,7 @@ public final class DataStore: ObservableObject {
         modelContext = shoppingStore.modelContext
         fetchData()
         restoreListPreferences()
+        pruneExpiredData()
     }
 
     public func fetchData() {
@@ -81,6 +90,31 @@ public final class DataStore: ObservableObject {
         archivedItems = shoppingStore.archivedItems
         items = activeItems + archivedItems
         tags = shoppingStore.tags
+    }
+
+    /// Soft-deletes expired completed items and physically purges aged tombstones.
+    @discardableResult
+    public func pruneExpiredData(now: Date = Date()) -> DataPruneResult {
+        do {
+            let result = try shoppingStore.pruneExpiredData(
+                retention: dataRetention,
+                now: now
+            )
+            if result.didChange {
+                lastError = nil
+                if result.softDeletedItemCount > 0 {
+                    localMutationObservers.values.forEach { $0() }
+                }
+                fetchData()
+            }
+            return result
+        } catch let error as ShoppingStoreError {
+            lastError = error
+        } catch {
+            lastError = .saveFailed(error.localizedDescription)
+        }
+        fetchData()
+        return DataPruneResult()
     }
 
     public var filteredItems: [ShoppingItem] {
@@ -386,6 +420,7 @@ public final class DataStore: ObservableObject {
         static let selectedTags = "shop.list.selectedTags"
         static let dateRangeStart = "shop.list.dateRange.start"
         static let dateRangeEnd = "shop.list.dateRange.end"
+        static let dataRetention = "shop.data.retention"
     }
 
     private func restoreListPreferences() {
@@ -406,6 +441,10 @@ public final class DataStore: ObservableObject {
            let value = GroupOption(rawValue: raw) {
             groupOption = value
         }
+        if let raw = defaults.string(forKey: PreferenceKey.dataRetention),
+           let value = DataRetentionPolicy(rawValue: raw) {
+            dataRetention = value
+        }
         if let raw = defaults.array(forKey: PreferenceKey.selectedTags) as? [String] {
             selectedTags = Set(raw.compactMap(UUID.init(uuidString:)))
         }
@@ -422,6 +461,7 @@ public final class DataStore: ObservableObject {
         defaults.set(selectedFilter.rawValue, forKey: PreferenceKey.filter)
         defaults.set(sortOption.rawValue, forKey: PreferenceKey.sort)
         defaults.set(groupOption.rawValue, forKey: PreferenceKey.group)
+        defaults.set(dataRetention.rawValue, forKey: PreferenceKey.dataRetention)
         defaults.set(
             selectedTags.map(\.uuidString).sorted(),
             forKey: PreferenceKey.selectedTags

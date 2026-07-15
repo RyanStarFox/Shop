@@ -44,6 +44,7 @@ struct ShopMacApp: App {
                         serverURL: webdavServer,
                         username: webdavUsername
                     )
+                    dataStore.pruneExpiredData()
                 }
         }
         .modelContainer(dataStore.modelContainer)

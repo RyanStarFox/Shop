@@ -22,6 +22,16 @@ struct MacSettingsView: View {
                     Text(ShopStrings.darkMode).tag(AppearancePreference.dark.rawValue)
                 }
                 .pickerStyle(.radioGroup)
+
+                Picker(ShopStrings.dataRetention, selection: $dataStore.dataRetention) {
+                    ForEach(DataRetentionPolicy.allCases, id: \.self) { policy in
+                        Text(policy.localizedTitle).tag(policy)
+                    }
+                }
+
+                Text(ShopStrings.dataRetentionFooter)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .formStyle(.grouped)
             .padding()
