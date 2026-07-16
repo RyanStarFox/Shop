@@ -117,4 +117,34 @@ public enum ShoppingUndo {
             )
         }
     }
+
+    public static func undoBatchCompletion(
+        previousStates: [(itemID: UUID, isCompleted: Bool, completedAt: Date?)],
+        store: ShoppingStore,
+        now: Date = Date()
+    ) -> UndoAction {
+        UndoAction(message: ShopStrings.undoBatchItemsChanged) {
+            try store.restoreCompletionStates(previousStates, now: now)
+        }
+    }
+
+    public static func undoBatchItemDelete(
+        itemIDs: [UUID],
+        store: ShoppingStore,
+        now: Date = Date()
+    ) -> UndoAction {
+        UndoAction(message: ShopStrings.undoBatchItemsDeleted) {
+            try store.restoreItems(itemIDs: itemIDs, now: now)
+        }
+    }
+
+    public static func undoBatchTagMembership(
+        previousMemberships: [(itemID: UUID, tagIDs: [UUID])],
+        store: ShoppingStore,
+        now: Date = Date()
+    ) -> UndoAction {
+        UndoAction(message: ShopStrings.undoBatchTagsChanged) {
+            try store.restoreTagMemberships(previousMemberships, now: now)
+        }
+    }
 }

@@ -472,6 +472,86 @@ public final class ShoppingStore {
         }
     }
 
+    /// Restores completion state for many items in one save (undo helper).
+    public func restoreCompletionStates(
+        _ states: [(itemID: UUID, isCompleted: Bool, completedAt: Date?)],
+        now: Date = Date()
+    ) throws {
+        var snapshots: [(ShoppingItem, Bool, Date?, Date, String)] = []
+        for state in states {
+            guard let item = item(id: state.itemID) else { continue }
+            snapshots.append(
+                (item, item.isCompleted, item.completedAt, item.updatedAt, item.lastEditorDeviceID)
+            )
+            item.isCompleted = state.isCompleted
+            item.completedAt = state.completedAt
+            advanceVersion(of: item, now: now)
+        }
+        guard !snapshots.isEmpty else { return }
+        do {
+            try save()
+        } catch {
+            for (item, wasCompleted, completedAt, updatedAt, deviceID) in snapshots {
+                item.isCompleted = wasCompleted
+                item.completedAt = completedAt
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = deviceID
+            }
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    /// Restores soft-deleted items in one save (undo helper).
+    public func restoreItems(itemIDs: [UUID], now: Date = Date()) throws {
+        var snapshots: [(ShoppingItem, Date?, Date, String)] = []
+        for id in itemIDs {
+            guard let item = item(id: id) else { continue }
+            snapshots.append((item, item.deletedAt, item.updatedAt, item.lastEditorDeviceID))
+            item.deletedAt = nil
+            advanceVersion(of: item, now: now)
+        }
+        guard !snapshots.isEmpty else { return }
+        do {
+            try save()
+        } catch {
+            for (item, deletedAt, updatedAt, deviceID) in snapshots {
+                item.deletedAt = deletedAt
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = deviceID
+            }
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    /// Restores prior tag memberships in one save (undo helper).
+    public func restoreTagMemberships(
+        _ previous: [(itemID: UUID, tagIDs: [UUID])],
+        now: Date = Date()
+    ) throws {
+        var snapshots: [(ShoppingItem, [Tag], Date, String)] = []
+        for entry in previous {
+            guard let item = item(id: entry.itemID), item.deletedAt == nil else { continue }
+            let tags = try activeTags(ids: entry.tagIDs)
+            snapshots.append((item, item.tags, item.updatedAt, item.lastEditorDeviceID))
+            item.tags = tags
+            advanceVersion(of: item, now: now)
+        }
+        guard !snapshots.isEmpty else { return }
+        do {
+            try save()
+        } catch {
+            for (item, tags, updatedAt, deviceID) in snapshots {
+                item.tags = tags
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = deviceID
+            }
+            modelContext.rollback()
+            throw error
+        }
+    }
+
     public func restoreTag(
         id: UUID,
         linkedItemIDs: [UUID],

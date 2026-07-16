@@ -174,9 +174,13 @@ public final class DataStore: ObservableObject {
 
     // MARK: - Item operations
 
-    public func addItem(name: String, tags: [Tag] = []) {
+    public func addItem(name: String, tags: [Tag] = [], createdAt: Date? = nil) {
         performMutation {
-            _ = try shoppingStore.addItem(name: name, tagIDs: tags.map(\.id))
+            _ = try shoppingStore.addItem(
+                name: name,
+                tagIDs: tags.map(\.id),
+                createdAt: createdAt
+            )
         }
     }
 
@@ -208,6 +212,29 @@ public final class DataStore: ObservableObject {
         )
     }
 
+    public func setCompleted(
+        _ itemIDs: [UUID],
+        completed: Bool,
+        presentUndo: (UndoAction) -> Void
+    ) {
+        let previous: [(UUID, Bool, Date?)] = itemIDs.compactMap { id in
+            guard let item = items.first(where: { $0.id == id }) else { return nil }
+            guard item.isCompleted != completed else { return nil }
+            return (id, item.isCompleted, item.completedAt)
+        }
+        guard !previous.isEmpty else { return }
+        let succeeded = performMutation {
+            _ = try shoppingStore.setCompleted(itemIDs: itemIDs, completed: completed)
+        }
+        guard succeeded else { return }
+        presentUndo(
+            ShoppingUndo.undoBatchCompletion(
+                previousStates: previous.map { ($0.0, $0.1, $0.2) },
+                store: shoppingStore
+            )
+        )
+    }
+
     public func deleteItem(
         _ item: ShoppingItem,
         presentUndo: (UndoAction) -> Void = { _ in }
@@ -220,6 +247,62 @@ public final class DataStore: ObservableObject {
         presentUndo(
             ShoppingUndo.undoItemDelete(
                 itemID: itemID,
+                store: shoppingStore
+            )
+        )
+    }
+
+    public func deleteItems(
+        _ itemIDs: [UUID],
+        presentUndo: (UndoAction) -> Void = { _ in }
+    ) {
+        let existing = itemIDs.filter { id in items.contains(where: { $0.id == id }) }
+        guard !existing.isEmpty else { return }
+        let succeeded = performMutation {
+            _ = try shoppingStore.softDeleteItems(itemIDs: existing)
+        }
+        guard succeeded else { return }
+        presentUndo(
+            ShoppingUndo.undoBatchItemDelete(
+                itemIDs: existing,
+                store: shoppingStore
+            )
+        )
+    }
+
+    public func addTag(_ tag: Tag, toItemIDs itemIDs: [UUID], presentUndo: (UndoAction) -> Void) {
+        let previous: [(UUID, [UUID])] = itemIDs.compactMap { id in
+            guard let item = items.first(where: { $0.id == id }) else { return nil }
+            guard !item.tags.contains(where: { $0.id == tag.id }) else { return nil }
+            return (id, item.tags.map(\.id))
+        }
+        guard !previous.isEmpty else { return }
+        let succeeded = performMutation {
+            _ = try shoppingStore.addTag(tagID: tag.id, toItemIDs: itemIDs)
+        }
+        guard succeeded else { return }
+        presentUndo(
+            ShoppingUndo.undoBatchTagMembership(
+                previousMemberships: previous.map { ($0.0, $0.1) },
+                store: shoppingStore
+            )
+        )
+    }
+
+    public func removeTag(_ tag: Tag, fromItemIDs itemIDs: [UUID], presentUndo: (UndoAction) -> Void) {
+        let previous: [(UUID, [UUID])] = itemIDs.compactMap { id in
+            guard let item = items.first(where: { $0.id == id }) else { return nil }
+            guard item.tags.contains(where: { $0.id == tag.id }) else { return nil }
+            return (id, item.tags.map(\.id))
+        }
+        guard !previous.isEmpty else { return }
+        let succeeded = performMutation {
+            _ = try shoppingStore.removeTag(tagID: tag.id, fromItemIDs: itemIDs)
+        }
+        guard succeeded else { return }
+        presentUndo(
+            ShoppingUndo.undoBatchTagMembership(
+                previousMemberships: previous.map { ($0.0, $0.1) },
                 store: shoppingStore
             )
         )
@@ -304,6 +387,7 @@ public final class DataStore: ObservableObject {
             throw error
         }
         fetchData()
+        publishWidgetSnapshot()
     }
 
     public func updateTag(_ tag: Tag, name: String? = nil, colorHex: String? = nil) {
@@ -382,6 +466,7 @@ public final class DataStore: ObservableObject {
             lastError = .saveFailed(error.localizedDescription)
         }
         fetchData()
+        publishWidgetSnapshot()
     }
 
     @discardableResult
@@ -391,6 +476,7 @@ public final class DataStore: ObservableObject {
             lastError = nil
             localMutationObservers.values.forEach { $0() }
             fetchData()
+            publishWidgetSnapshot()
             return true
         } catch let error as ShoppingStoreError {
             lastError = error
@@ -398,7 +484,36 @@ public final class DataStore: ObservableObject {
             lastError = .saveFailed(error.localizedDescription)
         }
         fetchData()
+        publishWidgetSnapshot()
         return false
+    }
+
+    /// Writes active items for Home Screen / Desktop widgets.
+    public func publishWidgetSnapshot() {
+        WidgetSnapshotStore.publish(
+            activeItems: activeItems.map { ($0.id, $0.name, $0.sortOrder) }
+        )
+    }
+
+    /// Applies completions queued by the widget extension, then refreshes the snapshot.
+    public func applyPendingWidgetCompletions() {
+        let pending = WidgetSnapshotStore.loadPendingCompletions()
+        guard !pending.isEmpty else {
+            publishWidgetSnapshot()
+            return
+        }
+        for id in pending {
+            do {
+                try shoppingStore.setCompleted(itemID: id, completed: true)
+            } catch {
+                // Item may already be completed or deleted; ignore.
+            }
+        }
+        WidgetSnapshotStore.clearPendingCompletions()
+        lastError = nil
+        localMutationObservers.values.forEach { $0() }
+        fetchData()
+        publishWidgetSnapshot()
     }
 
     private static func stableDeviceID() -> String {

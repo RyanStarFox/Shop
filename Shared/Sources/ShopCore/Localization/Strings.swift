@@ -140,6 +140,9 @@ public enum ShopStrings {
     public static var noTags: String {
         NSLocalizedString("tag.none", comment: "No tags")
     }
+    public static var allTags: String {
+        NSLocalizedString("tags.all", bundle: .module, comment: "All tags filter")
+    }
 
     // MARK: - Filter
     public static var filter: String {
@@ -224,6 +227,48 @@ public enum ShopStrings {
     }
     public static var about: String {
         NSLocalizedString("settings.about", comment: "About")
+    }
+    public static var viewTutorial: String {
+        NSLocalizedString("onboarding.view_tutorial", bundle: .module, comment: "Reopen tutorial")
+    }
+    public static var onboardingGetStarted: String {
+        NSLocalizedString("onboarding.get_started", bundle: .module, comment: "Finish onboarding")
+    }
+    public static var onboardingNext: String {
+        NSLocalizedString("onboarding.next", bundle: .module, comment: "Next onboarding page")
+    }
+    public static var onboardingAddTitle: String {
+        NSLocalizedString("onboarding.add.title", bundle: .module, comment: "Onboarding add title")
+    }
+    public static var onboardingAddBodyPhone: String {
+        NSLocalizedString("onboarding.add.body_phone", bundle: .module, comment: "Onboarding add body iPhone")
+    }
+    public static var onboardingAddBodyMac: String {
+        NSLocalizedString("onboarding.add.body_mac", bundle: .module, comment: "Onboarding add body Mac")
+    }
+    public static var onboardingCompleteTitle: String {
+        NSLocalizedString("onboarding.complete.title", bundle: .module, comment: "Onboarding complete title")
+    }
+    public static var onboardingCompleteBody: String {
+        NSLocalizedString("onboarding.complete.body", bundle: .module, comment: "Onboarding complete body")
+    }
+    public static var onboardingCompleteBodyMac: String {
+        NSLocalizedString("onboarding.complete.body_mac", bundle: .module, comment: "Onboarding complete body Mac")
+    }
+    public static var onboardingSyncTitle: String {
+        NSLocalizedString("onboarding.sync.title", bundle: .module, comment: "Onboarding sync title")
+    }
+    public static var onboardingSyncBody: String {
+        NSLocalizedString("onboarding.sync.body", bundle: .module, comment: "Onboarding sync body")
+    }
+    public static var onboardingGesturesTitle: String {
+        NSLocalizedString("onboarding.gestures.title", bundle: .module, comment: "Onboarding gestures title")
+    }
+    public static var onboardingGesturesBodyPhone: String {
+        NSLocalizedString("onboarding.gestures.body_phone", bundle: .module, comment: "Onboarding gestures iPhone")
+    }
+    public static var onboardingGesturesBodyMac: String {
+        NSLocalizedString("onboarding.gestures.body_mac", bundle: .module, comment: "Onboarding gestures Mac")
     }
     public static var appTagline: String {
         NSLocalizedString("app.tagline", bundle: .module, comment: "App tagline")
@@ -369,6 +414,15 @@ public enum ShopStrings {
     }
     public static var undoTagDeleted: String {
         NSLocalizedString("undo.tag_deleted", bundle: .module, comment: "Tag deleted")
+    }
+    public static var undoBatchItemsChanged: String {
+        NSLocalizedString("undo.batch_items_changed", bundle: .module, comment: "Undo batch change")
+    }
+    public static var undoBatchItemsDeleted: String {
+        NSLocalizedString("undo.batch_items_deleted", bundle: .module, comment: "Undo batch delete")
+    }
+    public static var undoBatchTagsChanged: String {
+        NSLocalizedString("undo.batch_tags_changed", bundle: .module, comment: "Undo tag change")
     }
     public static var dismiss: String {
         NSLocalizedString("common.dismiss", bundle: .module, comment: "Dismiss an alert")

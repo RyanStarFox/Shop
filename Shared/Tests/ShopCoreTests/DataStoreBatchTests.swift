@@ -48,6 +48,57 @@ final class DataStoreBatchTests: XCTestCase {
         let removed = try store.removeTag(tagID: tag.id, fromItemIDs: [a.id, b.id], now: .t2)
         XCTAssertEqual(Set(removed), [a.id, b.id])
     }
+
+    func testBatchCompletePresentsSingleUndoAndOneObserver() {
+        let store = DataStore(inMemory: true)
+        store.addItem(name: "A")
+        store.addItem(name: "B")
+        let ids = store.items.map(\.id)
+        var undos = 0
+        var observers = 0
+        _ = store.addLocalMutationObserver { observers += 1 }
+        observers = 0
+        store.setCompleted(ids, completed: true) { _ in undos += 1 }
+        XCTAssertEqual(undos, 1)
+        XCTAssertEqual(observers, 1)
+        XCTAssertEqual(store.activeItems.count, 0)
+    }
+
+    func testBatchDeleteUndoRestoresAll() throws {
+        let store = DataStore(inMemory: true)
+        store.addItem(name: "A")
+        store.addItem(name: "B")
+        let ids = store.items.map(\.id)
+        let coordinator = UndoCoordinator(
+            duration: 60,
+            performMutation: { mutation in
+                try store.performUndoMutation(mutation)
+            }
+        )
+        store.deleteItems(ids, presentUndo: coordinator.present)
+        XCTAssertTrue(store.items.isEmpty)
+        try coordinator.undo()
+        XCTAssertEqual(Set(store.items.map(\.name)), ["A", "B"])
+    }
+
+    func testBatchTagAddUndoRestoresMembership() throws {
+        let store = DataStore(inMemory: true)
+        store.addTag(name: "Food", colorHex: "#C53A32")
+        let tag = store.tags.first!
+        store.addItem(name: "A")
+        store.addItem(name: "B")
+        let ids = store.items.map(\.id)
+        let coordinator = UndoCoordinator(
+            duration: 60,
+            performMutation: { mutation in
+                try store.performUndoMutation(mutation)
+            }
+        )
+        store.addTag(tag, toItemIDs: ids, presentUndo: coordinator.present)
+        XCTAssertTrue(store.items.allSatisfy { $0.tags.contains(where: { $0.id == tag.id }) })
+        try coordinator.undo()
+        XCTAssertTrue(store.items.allSatisfy { !$0.tags.contains(where: { $0.id == tag.id }) })
+    }
 }
 
 private extension Date {
