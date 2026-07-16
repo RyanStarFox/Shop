@@ -170,7 +170,7 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(transport.putCount, 3)
         XCTAssertEqual(
             coordinator.status,
-            .failed(message: ShopStrings.webdavPreconditionFailed, canRetry: true)
+            .failed(message: WebDAVError.preconditionFailed.userFacingMessage, canRetry: true)
         )
         XCTAssertEqual(store.items.map(\.name), ["Local"])
     }
@@ -188,7 +188,7 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.name), ["Local"])
         XCTAssertEqual(
             coordinator.status,
-            .failed(message: ShopStrings.webdavNetworkFailed, canRetry: true)
+            .failed(message: WebDAVError.network(.notConnectedToInternet).userFacingMessage, canRetry: true)
         )
 
         await coordinator.syncNow()
@@ -272,6 +272,7 @@ private final class FakeCoordinatorTransport: WebDAVTransporting, @unchecked Sen
     private(set) var putSnapshots: [SyncSnapshot] = []
     private(set) var fetchCount = 0
     private(set) var putCount = 0
+    var diagnosticFileURL: String? { nil }
 
     init(
         fetchResults: [Result<RemoteSnapshot?, Error>] = [.success(nil)],

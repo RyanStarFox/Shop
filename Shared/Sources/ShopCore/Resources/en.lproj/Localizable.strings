@@ -46,9 +46,17 @@
 /* WebDAV sync errors */
 "webdav.error.unauthorized" = "WebDAV authentication failed. Check your username and password.";
 "webdav.error.precondition_failed" = "The remote shopping list changed. Please sync again.";
-"webdav.error.network" = "Unable to reach the WebDAV server.";
+"webdav.error.network" = "Unable to reach the WebDAV server. Check Wi‑Fi, VPN, and the server address.";
 "webdav.error.invalid_server" = "Enter a valid HTTPS WebDAV server address.";
 "webdav.error.sync_failed" = "Unable to sync with the WebDAV server.";
+"webdav.error.insecure" = "Only HTTPS WebDAV is allowed. Change the server URL to https://…";
+"webdav.error.not_found" = "The WebDAV folder or file was not found. Check the folder path.";
+"webdav.error.invalid_response" = "The server returned an unexpected response.";
+"webdav.error.decoding" = "The remote shopping list file could not be read (invalid JSON).";
+"webdav.error.missing_password" = "Enter the WebDAV password once to save it, then sync again.";
+"webdav.error.http_status" = "The WebDAV server rejected the request (HTTP %d).";
+"webdav.error.detail_prefix" = "Detail: ";
+"webdav.error.target_url_prefix" = "URL: ";
 
 "sync.watch_status" = "Watch Sync";
 "watch.error.invalid_snapshot" = "The Watch sync snapshot is invalid.";

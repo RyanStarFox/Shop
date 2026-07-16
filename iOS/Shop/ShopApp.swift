@@ -50,12 +50,14 @@ struct ShopApp: App {
                         folderPath: webdavPath
                     )
                     dataStore.pruneExpiredData()
+                    Task { await syncCoordinator.syncNowIfConfigured() }
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
                     dataStore.pruneExpiredData()
                     watchSync.requestLatestSnapshot()
                     watchSync.sendLatestSnapshot()
+                    Task { await syncCoordinator.syncNowIfConfigured() }
                 }
         }
         .modelContainer(dataStore.modelContainer)

@@ -7,17 +7,9 @@ public enum WebDAVError: Error, Equatable, Sendable {
     case notFound
     case preconditionFailed
     case invalidResponse
+    case httpStatus(Int)
     case decoding
     case network(URLError.Code)
-
-    public var isRecoverable: Bool {
-        switch self {
-        case .preconditionFailed, .network:
-            true
-        case .invalidURL, .insecureURL, .unauthorized, .notFound, .invalidResponse, .decoding:
-            false
-        }
-    }
 }
 
 public struct RemoteSnapshot: Equatable, Sendable {
@@ -37,6 +29,8 @@ public enum WebDAVPrecondition: Equatable, Sendable {
 }
 
 public protocol WebDAVTransporting: Sendable {
+    /// Resolved sync file URL for error diagnostics, when known.
+    var diagnosticFileURL: String? { get }
     func fetch() async throws -> RemoteSnapshot?
     func put(_ snapshot: SyncSnapshot, precondition: WebDAVPrecondition) async throws -> String?
 }
@@ -137,7 +131,7 @@ public final class WebDAVTransport: WebDAVTransporting, @unchecked Sendable {
         case 412:
             throw WebDAVError.preconditionFailed
         default:
-            throw WebDAVError.invalidResponse
+            throw WebDAVError.httpStatus(httpResponse.statusCode)
         }
     }
 
@@ -156,7 +150,7 @@ public final class WebDAVTransport: WebDAVTransporting, @unchecked Sendable {
         do {
             request.httpBody = try encoder.encode(snapshot)
         } catch {
-            throw WebDAVError.invalidResponse
+            throw WebDAVError.decoding
         }
 
         let (_, response) = try await perform(request)
@@ -171,8 +165,17 @@ public final class WebDAVTransport: WebDAVTransporting, @unchecked Sendable {
         case 412:
             throw WebDAVError.preconditionFailed
         default:
-            throw WebDAVError.invalidResponse
+            throw WebDAVError.httpStatus(httpResponse.statusCode)
         }
+    }
+
+    /// Exposed for settings diagnostics.
+    public var syncFileURLString: String {
+        fileURL.absoluteString
+    }
+
+    public var diagnosticFileURL: String? {
+        syncFileURLString
     }
 
     private func makeRequest(method: String) -> URLRequest {

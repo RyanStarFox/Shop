@@ -81,6 +81,15 @@ public final class SyncCoordinator: ObservableObject {
     }
 
     public func syncNow() async {
+        await syncNow(reportMissingTransport: true)
+    }
+
+    /// Sync immediately when a transport is configured; no-op (no error banner) otherwise.
+    public func syncNowIfConfigured() async {
+        await syncNow(reportMissingTransport: false)
+    }
+
+    private func syncNow(reportMissingTransport: Bool) async {
         if let debounceTask {
             debounceGeneration += 1
             debounceTask.cancel()
@@ -94,7 +103,7 @@ public final class SyncCoordinator: ObservableObject {
             return
         }
 
-        await beginSync(reportMissingTransport: true)
+        await beginSync(reportMissingTransport: reportMissingTransport)
     }
 
     private func beginSync(reportMissingTransport: Bool) async {
@@ -137,7 +146,7 @@ public final class SyncCoordinator: ObservableObject {
                 }
             }
             status = .failed(
-                message: ShopStrings.webdavPreconditionFailed,
+                message: localizedMessage(for: WebDAVError.preconditionFailed),
                 canRetry: true
             )
         } catch {
@@ -167,21 +176,19 @@ public final class SyncCoordinator: ObservableObject {
     }
 
     private func localizedMessage(for error: Error) -> String {
-        guard let error = error as? WebDAVError else {
-            return ShopStrings.webdavSyncFailed
+        var message: String
+        if let error = error as? WebDAVError {
+            message = error.userFacingMessage
+        } else {
+            message = """
+            \(ShopStrings.webdavSyncFailed)
+            \(ShopStrings.webdavErrorDetailPrefix)\(error.localizedDescription)
+            """
         }
-        switch error {
-        case .unauthorized:
-            return ShopStrings.webdavUnauthorized
-        case .preconditionFailed:
-            return ShopStrings.webdavPreconditionFailed
-        case .network:
-            return ShopStrings.webdavNetworkFailed
-        case .invalidURL, .insecureURL:
-            return ShopStrings.webdavInvalidServer
-        case .notFound, .invalidResponse, .decoding:
-            return ShopStrings.webdavSyncFailed
+        if let url = transport?.diagnosticFileURL {
+            message += "\n\(ShopStrings.webdavTargetURLPrefix)\(url)"
         }
+        return message
     }
 
     private func isRetryable(_ error: Error) -> Bool {

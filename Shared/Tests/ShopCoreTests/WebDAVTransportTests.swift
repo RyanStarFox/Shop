@@ -145,6 +145,13 @@ final class WebDAVTransportTests: XCTestCase {
         }
     }
 
+    func testUserFacingMessageIncludesFriendlyAndTechnicalDetail() {
+        let message = WebDAVError.network(.timedOut).userFacingMessage
+        XCTAssertTrue(message.contains(ShopStrings.webdavNetworkFailed))
+        XCTAssertTrue(message.contains("URLError"))
+        XCTAssertTrue(message.contains("timedOut"))
+    }
+
     func testRejectsInsecureURLsUnlessExplicitlyAllowed() throws {
         XCTAssertThrowsError(try WebDAVTransport(
             serverURL: "http://dav.example.com",

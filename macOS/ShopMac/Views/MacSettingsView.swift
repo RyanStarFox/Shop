@@ -48,7 +48,8 @@ struct MacSettingsView: View {
                 isConfigured: webdavSync.isConfigured,
                 isSyncing: syncCoordinator.status.isSyncing,
                 lastSync: syncCoordinator.status.lastSuccess,
-                error: syncCoordinator.status.failureMessage ?? webdavSync.error,
+                error: webdavSync.error ?? syncCoordinator.status.failureMessage,
+                resolvedFileURL: webdavSync.resolvedFileURL,
                 onSync: saveCredentialsAndSync
             )
             .tabItem {
@@ -111,6 +112,7 @@ private struct WebDAVSettingsTab: View {
     let isSyncing: Bool
     let lastSync: Date?
     let error: String?
+    let resolvedFileURL: String?
     let onSync: () -> Void
 
     var body: some View {
@@ -132,31 +134,32 @@ private struct WebDAVSettingsTab: View {
             }
 
             Section {
-                HStack {
-                    Button(ShopStrings.syncNow, action: onSync)
-                        .disabled(server.isEmpty || username.isEmpty || isSyncing)
+                Button(ShopStrings.syncNow, action: onSync)
+                    .disabled(server.isEmpty || username.isEmpty || isSyncing)
 
-                    if isSyncing {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
+                if isSyncing {
+                    ProgressView(ShopStrings.syncing)
+                        .controlSize(.small)
+                } else if let error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                } else if let lastSync {
+                    Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if isConfigured {
+                    Text(ShopStrings.webdavConfigured)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
-                    Spacer()
-
-                    if let error {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .lineLimit(2)
-                    } else if let lastSync {
-                        Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if isConfigured {
-                        Text(ShopStrings.webdavConfigured)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                if let resolvedFileURL {
+                    Text("\(ShopStrings.webdavTargetURLPrefix)\(resolvedFileURL)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                 }
             }
         }

@@ -5,6 +5,8 @@ import Foundation
 public final class WebDAVSyncService: ObservableObject {
     @Published public var isConfigured = false
     @Published public private(set) var configurationError: String?
+    /// Last resolved `shop_sync.json` URL for diagnostics.
+    @Published public private(set) var resolvedFileURL: String?
 
     public var isSyncing: Bool { coordinator?.status.isSyncing ?? false }
     public var lastSyncDate: Date? { coordinator?.status.lastSuccess }
@@ -45,6 +47,7 @@ public final class WebDAVSyncService: ObservableObject {
             transport = nil
             coordinator?.configure(transport: nil)
             isConfigured = false
+            resolvedFileURL = nil
             configurationError = ShopStrings.webdavNotConfigured
             return
         }
@@ -57,7 +60,11 @@ public final class WebDAVSyncService: ObservableObject {
                 transport = nil
                 coordinator?.configure(transport: nil)
                 isConfigured = false
-                configurationError = ShopStrings.webdavNotConfigured
+                resolvedFileURL = nil
+                configurationError = """
+                \(ShopStrings.webdavMissingPassword)
+                \(ShopStrings.webdavErrorDetailPrefix)missingKeychainPassword
+                """
                 return
             }
             try configureTransport(
@@ -70,7 +77,8 @@ public final class WebDAVSyncService: ObservableObject {
             transport = nil
             coordinator?.configure(transport: nil)
             isConfigured = false
-            configurationError = localizedMessage(for: error)
+            resolvedFileURL = nil
+            configurationError = localizedMessage(for: error, serverURL: serverURL, folderPath: folderPath)
             throw error
         }
     }
@@ -80,6 +88,7 @@ public final class WebDAVSyncService: ObservableObject {
             transport = nil
             coordinator?.configure(transport: nil)
             isConfigured = false
+            resolvedFileURL = nil
             return
         }
         do {
@@ -87,6 +96,7 @@ public final class WebDAVSyncService: ObservableObject {
                 transport = nil
                 coordinator?.configure(transport: nil)
                 isConfigured = false
+                resolvedFileURL = nil
                 return
             }
             try configureTransport(
@@ -99,7 +109,8 @@ public final class WebDAVSyncService: ObservableObject {
             transport = nil
             coordinator?.configure(transport: nil)
             isConfigured = false
-            configurationError = localizedMessage(for: error)
+            resolvedFileURL = nil
+            configurationError = localizedMessage(for: error, serverURL: serverURL, folderPath: folderPath)
         }
     }
 
@@ -125,7 +136,7 @@ public final class WebDAVSyncService: ObservableObject {
                 folderPath: folderPath
             )
         } catch {
-            configurationError = localizedMessage(for: error)
+            configurationError = localizedMessage(for: error, serverURL: serverURL, folderPath: folderPath)
         }
     }
 
@@ -134,6 +145,7 @@ public final class WebDAVSyncService: ObservableObject {
         transport = nil
         coordinator?.configure(transport: nil)
         isConfigured = false
+        resolvedFileURL = nil
         configurationError = nil
     }
 
@@ -156,30 +168,40 @@ public final class WebDAVSyncService: ObservableObject {
         password: String,
         folderPath: String
     ) throws {
-        transport = try WebDAVTransport(
+        let built = try WebDAVTransport(
             serverURL: serverURL,
             username: username,
             password: password,
             folderPath: folderPath
         )
+        transport = built
+        resolvedFileURL = built.syncFileURLString
         coordinator?.configure(transport: transport)
         isConfigured = true
         configurationError = nil
     }
 
-    private func localizedMessage(for error: Error) -> String {
-        switch error as? WebDAVError {
-        case .unauthorized:
-            ShopStrings.webdavUnauthorized
-        case .preconditionFailed:
-            ShopStrings.webdavPreconditionFailed
-        case .network:
-            ShopStrings.webdavNetworkFailed
-        case .invalidURL, .insecureURL:
-            ShopStrings.webdavInvalidServer
-        case .notFound, .invalidResponse, .decoding, .none:
-            ShopStrings.webdavSyncFailed
+    private func localizedMessage(
+        for error: Error,
+        serverURL: String,
+        folderPath: String
+    ) -> String {
+        var message: String
+        if let error = error as? WebDAVError {
+            message = error.userFacingMessage
+        } else {
+            message = """
+            \(ShopStrings.webdavSyncFailed)
+            \(ShopStrings.webdavErrorDetailPrefix)\(error.localizedDescription)
+            """
         }
+        if let url = try? WebDAVTransport.makeSyncFileURL(
+            serverURL: serverURL,
+            folderPath: folderPath
+        ).absoluteString {
+            message += "\n\(ShopStrings.webdavTargetURLPrefix)\(url)"
+        }
+        return message
     }
 }
 #endif

@@ -13,6 +13,7 @@ struct ShopMacApp: App {
     @AppStorage("webdav_username") private var webdavUsername = ""
     @AppStorage("webdav_path") private var webdavPath = ""
     @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let store = ShopCore.DataStore()
@@ -48,6 +49,12 @@ struct ShopMacApp: App {
                         folderPath: webdavPath
                     )
                     dataStore.pruneExpiredData()
+                    Task { await syncCoordinator.syncNowIfConfigured() }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    dataStore.pruneExpiredData()
+                    Task { await syncCoordinator.syncNowIfConfigured() }
                 }
         }
         .modelContainer(dataStore.modelContainer)

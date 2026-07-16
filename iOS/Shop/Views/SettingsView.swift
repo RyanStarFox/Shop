@@ -149,14 +149,24 @@ struct SettingsView: View {
                                 if syncCoordinator.status.isSyncing {
                                     ProgressView(ShopStrings.syncing)
                                         .font(.caption)
-                                } else if let error = syncCoordinator.status.failureMessage ?? webdavSync.error {
+                                } else if let error = webdavSync.error ?? syncCoordinator.status.failureMessage {
                                     Text(error)
                                         .font(.caption)
                                         .foregroundStyle(.red)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .textSelection(.enabled)
                                 } else if let lastSync = syncCoordinator.status.lastSuccess {
                                     Text("\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                }
+
+                                if let resolved = webdavSync.resolvedFileURL {
+                                    Text("\(ShopStrings.webdavTargetURLPrefix)\(resolved)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                        .textSelection(.enabled)
                                 }
                             }
                         }

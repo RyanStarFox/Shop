@@ -54,7 +54,7 @@ final class WebDAVSyncServiceTests: XCTestCase {
 
         await service.syncNow()
 
-        XCTAssertEqual(service.error, ShopStrings.webdavPreconditionFailed)
+        XCTAssertEqual(service.error, WebDAVError.preconditionFailed.userFacingMessage)
         XCTAssertNil(service.lastSyncDate)
         XCTAssertFalse(service.isSyncing)
         XCTAssertEqual(transport.putPreconditions, [.create, .create, .create])
@@ -69,6 +69,7 @@ private final class FakeWebDAVTransport: WebDAVTransporting, @unchecked Sendable
     private(set) var fetchCount = 0
     private(set) var putSnapshots: [SyncSnapshot] = []
     private(set) var putPreconditions: [WebDAVPrecondition] = []
+    var diagnosticFileURL: String? { nil }
 
     init(
         fetchedSnapshot: RemoteSnapshot?,

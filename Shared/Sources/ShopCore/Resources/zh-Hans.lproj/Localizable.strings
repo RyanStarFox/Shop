@@ -46,9 +46,17 @@
 /* WebDAV sync errors */
 "webdav.error.unauthorized" = "WebDAV 身份验证失败，请检查用户名和密码。";
 "webdav.error.precondition_failed" = "远程购物清单已更改，请重新同步。";
-"webdav.error.network" = "无法连接 WebDAV 服务器。";
+"webdav.error.network" = "无法连接 WebDAV 服务器，请检查网络、VPN 和服务器地址。";
 "webdav.error.invalid_server" = "请输入有效的 HTTPS WebDAV 服务器地址。";
 "webdav.error.sync_failed" = "无法与 WebDAV 服务器同步。";
+"webdav.error.insecure" = "仅支持 HTTPS WebDAV，请将服务器地址改为 https://…";
+"webdav.error.not_found" = "找不到 WebDAV 文件夹或文件，请检查文件夹路径。";
+"webdav.error.invalid_response" = "服务器返回了异常响应。";
+"webdav.error.decoding" = "无法解析远程购物清单文件（JSON 无效）。";
+"webdav.error.missing_password" = "请先填写一次 WebDAV 密码并保存，然后再同步。";
+"webdav.error.http_status" = "WebDAV 服务器拒绝了请求（HTTP %d）。";
+"webdav.error.detail_prefix" = "详情：";
+"webdav.error.target_url_prefix" = "地址：";
 
 "sync.watch_status" = "Apple Watch 同步";
 "watch.error.invalid_snapshot" = "Apple Watch 同步快照无效。";

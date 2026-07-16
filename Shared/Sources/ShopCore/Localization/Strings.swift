@@ -321,6 +321,38 @@ public enum ShopStrings {
     public static var webdavSyncFailed: String {
         NSLocalizedString("webdav.error.sync_failed", bundle: .module, comment: "WebDAV sync failed")
     }
+    public static var webdavInsecureServer: String {
+        NSLocalizedString("webdav.error.insecure", bundle: .module, comment: "HTTP not allowed")
+    }
+    public static var webdavNotFound: String {
+        NSLocalizedString("webdav.error.not_found", bundle: .module, comment: "Remote folder or file missing")
+    }
+    public static var webdavInvalidResponse: String {
+        NSLocalizedString("webdav.error.invalid_response", bundle: .module, comment: "Invalid server response")
+    }
+    public static var webdavDecodingFailed: String {
+        NSLocalizedString("webdav.error.decoding", bundle: .module, comment: "Could not parse remote JSON")
+    }
+    public static var webdavMissingPassword: String {
+        NSLocalizedString("webdav.error.missing_password", bundle: .module, comment: "Password required")
+    }
+    public static var webdavErrorDetailPrefix: String {
+        NSLocalizedString("webdav.error.detail_prefix", bundle: .module, comment: "Detail label prefix")
+    }
+    public static var webdavTargetURLPrefix: String {
+        NSLocalizedString("webdav.error.target_url_prefix", bundle: .module, comment: "Target URL label prefix")
+    }
+    public static func webdavHTTPFailed(_ statusCode: Int) -> String {
+        String(
+            format: NSLocalizedString(
+                "webdav.error.http_status",
+                bundle: .module,
+                comment: "HTTP status failure"
+            ),
+            locale: .current,
+            statusCode
+        )
+    }
 
     // MARK: - Undo
     public static var undo: String {
