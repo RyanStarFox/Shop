@@ -111,13 +111,15 @@ public final class ShoppingStore {
     public func addItem(
         name: String,
         tagIDs: [UUID],
+        createdAt: Date? = nil,
         now: Date = Date()
     ) throws -> ShoppingItem {
         let selectedTags = try activeTags(ids: tagIDs)
         let nextOrder = items.map(\.sortOrder).max().map { $0 + 1 } ?? 0
+        let stamp = createdAt ?? now
         let item = ShoppingItem(
             name: name,
-            createdAt: now,
+            createdAt: stamp,
             sortOrder: nextOrder,
             updatedAt: now,
             lastEditorDeviceID: deviceID,
@@ -166,7 +168,7 @@ public final class ShoppingStore {
         }
         if updateCompletedAt {
             item.completedAt = completedAt
-            if let completedAt {
+            if completedAt != nil {
                 item.isCompleted = true
             }
         }
@@ -237,6 +239,126 @@ public final class ShoppingStore {
         }
     }
 
+    /// Batch-sets completion. Skips missing, deleted, or already-at-target items. One save.
+    @discardableResult
+    public func setCompleted(
+        itemIDs: [UUID],
+        completed: Bool,
+        now: Date = Date()
+    ) throws -> [UUID] {
+        var changed: [UUID] = []
+        var snapshots: [(ShoppingItem, Bool, Date?, Date, String)] = []
+        for id in itemIDs {
+            guard let item = item(id: id), item.deletedAt == nil else { continue }
+            guard item.isCompleted != completed else { continue }
+            snapshots.append(
+                (item, item.isCompleted, item.completedAt, item.updatedAt, item.lastEditorDeviceID)
+            )
+            item.isCompleted = completed
+            item.completedAt = completed ? now : nil
+            advanceVersion(of: item, now: now)
+            changed.append(id)
+        }
+        guard !changed.isEmpty else { return [] }
+        do {
+            try save()
+        } catch {
+            for (item, wasCompleted, completedAt, updatedAt, deviceID) in snapshots {
+                item.isCompleted = wasCompleted
+                item.completedAt = completedAt
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = deviceID
+            }
+            modelContext.rollback()
+            throw error
+        }
+        return changed
+    }
+
+    /// Batch soft-delete. Skips missing or already-deleted items. One save.
+    @discardableResult
+    public func softDeleteItems(itemIDs: [UUID], now: Date = Date()) throws -> [UUID] {
+        var changed: [UUID] = []
+        var snapshots: [(ShoppingItem, Date?, Date, String)] = []
+        for id in itemIDs {
+            guard let item = item(id: id), item.deletedAt == nil else { continue }
+            snapshots.append((item, item.deletedAt, item.updatedAt, item.lastEditorDeviceID))
+            item.deletedAt = now
+            advanceVersion(of: item, now: now)
+            changed.append(id)
+        }
+        guard !changed.isEmpty else { return [] }
+        do {
+            try save()
+        } catch {
+            for (item, deletedAt, updatedAt, deviceID) in snapshots {
+                item.deletedAt = deletedAt
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = deviceID
+            }
+            modelContext.rollback()
+            throw error
+        }
+        return changed
+    }
+
+    /// Adds `tagID` to items that do not already have it. One save.
+    @discardableResult
+    public func addTag(tagID: UUID, toItemIDs: [UUID], now: Date = Date()) throws -> [UUID] {
+        let tag = try activeTags(ids: [tagID])[0]
+        var changed: [UUID] = []
+        var snapshots: [(ShoppingItem, [Tag], Date, String)] = []
+        for id in toItemIDs {
+            guard let item = item(id: id), item.deletedAt == nil else { continue }
+            guard !item.tags.contains(where: { $0.id == tagID }) else { continue }
+            snapshots.append((item, item.tags, item.updatedAt, item.lastEditorDeviceID))
+            item.tags.append(tag)
+            advanceVersion(of: item, now: now)
+            changed.append(id)
+        }
+        guard !changed.isEmpty else { return [] }
+        do {
+            try save()
+        } catch {
+            for (item, tags, updatedAt, deviceID) in snapshots {
+                item.tags = tags
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = deviceID
+            }
+            modelContext.rollback()
+            throw error
+        }
+        return changed
+    }
+
+    /// Removes `tagID` from items that have it. One save.
+    @discardableResult
+    public func removeTag(tagID: UUID, fromItemIDs: [UUID], now: Date = Date()) throws -> [UUID] {
+        var changed: [UUID] = []
+        var snapshots: [(ShoppingItem, [Tag], Date, String)] = []
+        for id in fromItemIDs {
+            guard let item = item(id: id), item.deletedAt == nil else { continue }
+            guard item.tags.contains(where: { $0.id == tagID }) else { continue }
+            snapshots.append((item, item.tags, item.updatedAt, item.lastEditorDeviceID))
+            item.tags.removeAll { $0.id == tagID }
+            advanceVersion(of: item, now: now)
+            changed.append(id)
+        }
+        guard !changed.isEmpty else { return [] }
+        do {
+            try save()
+        } catch {
+            for (item, tags, updatedAt, deviceID) in snapshots {
+                item.tags = tags
+                item.updatedAt = updatedAt
+                item.lastEditorDeviceID = deviceID
+            }
+            modelContext.rollback()
+            throw error
+        }
+        return changed
+    }
+
     /// Soft-deletes expired completed archives, then physically removes aged tombstones.
     @discardableResult
     public func pruneExpiredData(
@@ -251,8 +373,8 @@ public final class ShoppingStore {
         var result = DataPruneResult()
 
         for item in storedItems where item.deletedAt == nil && item.isCompleted {
-            let archiveDate = item.completedAt ?? item.createdAt
-            guard archiveDate < cutoff else { continue }
+            // Retention is measured from completion time only — not createdAt or updatedAt.
+            guard let completedAt = item.completedAt, completedAt < cutoff else { continue }
             item.deletedAt = now
             advanceVersion(of: item, now: now)
             result.softDeletedItemCount += 1
@@ -559,6 +681,11 @@ public final class ShoppingStore {
         try applyCanonical(snapshot: mergedSnapshot)
     }
 
+    /// Applies a snapshot that has already been merged with local state.
+    public func applyCanonicalSnapshot(_ snapshot: SyncSnapshot) throws {
+        try applyCanonical(snapshot: snapshot)
+    }
+
     private func applyCanonical(snapshot: SyncSnapshot) throws {
         var insertedTags: [Tag] = []
         for tagSnapshot in snapshot.tags {
@@ -597,7 +724,8 @@ public final class ShoppingStore {
                     name: itemSnapshot.name,
                     isCompleted: itemSnapshot.isCompleted,
                     createdAt: itemSnapshot.createdAt,
-                    completedAt: itemSnapshot.completedAt,
+                    completedAt: itemSnapshot.completedAt
+                        ?? (itemSnapshot.isCompleted ? itemSnapshot.updatedAt : nil),
                     sortOrder: itemSnapshot.sortOrder,
                     updatedAt: itemSnapshot.updatedAt,
                     deletedAt: itemSnapshot.deletedAt,
@@ -612,6 +740,7 @@ public final class ShoppingStore {
             item.isCompleted = itemSnapshot.isCompleted
             item.createdAt = itemSnapshot.createdAt
             item.completedAt = itemSnapshot.completedAt
+                ?? (itemSnapshot.isCompleted ? itemSnapshot.updatedAt : nil)
             item.sortOrder = itemSnapshot.sortOrder
             item.updatedAt = itemSnapshot.updatedAt
             item.deletedAt = itemSnapshot.deletedAt
