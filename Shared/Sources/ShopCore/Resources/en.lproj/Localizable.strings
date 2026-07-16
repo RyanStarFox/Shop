@@ -7,6 +7,17 @@
 "undo.batch_items_changed" = "Undo batch change";
 "undo.batch_items_deleted" = "Undo batch delete";
 "undo.batch_tags_changed" = "Undo tag change";
+"selection.select" = "Select";
+"selection.done" = "Done";
+"selection.count" = "%d Selected";
+"selection.mark_all_complete" = "Mark All Complete";
+"selection.mark_all_incomplete" = "Restore All";
+"selection.edit_tags" = "Tags";
+"selection.delete_confirm_title" = "Delete Items?";
+"selection.delete_confirm_message" = "Delete %d selected items?";
+"selection.tag_all" = "All selected have this tag";
+"selection.tag_some" = "Some selected have this tag";
+"selection.tag_none" = "None selected have this tag";
 "common.dismiss" = "OK";
 "common.cancel" = "Cancel";
 "appearance.system" = "System";

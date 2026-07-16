@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ShopCore
 
 struct MacContentView: View {
@@ -7,12 +8,23 @@ struct MacContentView: View {
     @EnvironmentObject private var webdavSync: WebDAVSyncService
     @EnvironmentObject private var syncCoordinator: SyncCoordinator
 
-    @State private var selectedItemID: UUID?
+    @State private var selectedItemIDs: Set<UUID> = []
+    @State private var selectionAnchorID: UUID?
+    @State private var showBatchDeleteConfirm = false
     @State private var searchText = ""
-    @State private var newItemName = ""
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    @State private var isDrafting = false
+    @State private var draftName = ""
+    @State private var draftSelectedTags: Set<UUID> = []
+    @State private var draftCreatedAt = Date()
+    @State private var isDetailTextFocused = false
+    @State private var syncSpin = 0.0
+    @State private var completionHapticToken = 0
+    @State private var restoreHapticToken = 0
+    @State private var refreshHapticToken = 0
     @FocusState private var isSearchFocused: Bool
-    @FocusState private var isAddFocused: Bool
+
+    private var isMultiSelecting: Bool { selectedItemIDs.count > 1 }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -26,13 +38,28 @@ struct MacContentView: View {
                 .navigationSplitViewColumnWidth(min: 260, ideal: 300)
         }
         .navigationSplitViewStyle(.balanced)
-        .tint(ShopTheme.naturalGreen)
+        .tint(ShopTheme.brandColor)
         .background(VisualEffectView(material: .windowBackground, blendingMode: .behindWindow))
+        .sensoryFeedback(.impact(weight: .heavy, intensity: 1.0), trigger: completionHapticToken)
+        .sensoryFeedback(.impact(weight: .medium, intensity: 1.0), trigger: restoreHapticToken)
+        .sensoryFeedback(.impact(weight: .heavy, intensity: 1.0), trigger: refreshHapticToken)
         .onDeleteCommand(perform: deleteSelectedItem)
+        .alert(ShopStrings.selectionDeleteConfirmTitle, isPresented: $showBatchDeleteConfirm) {
+            Button(ShopStrings.deleteItem, role: .destructive) {
+                dataStore.deleteItems(Array(selectedItemIDs), presentUndo: undoCoordinator.present)
+                selectedItemIDs = []
+                selectionAnchorID = nil
+            }
+            Button(ShopStrings.dismiss, role: .cancel) {}
+        } message: {
+            Text(ShopStrings.selectionDeleteConfirmMessage(selectedItemIDs.count))
+        }
         .background {
             Group {
-                Button(ShopStrings.addItem) { focusAddField() }
+                Button(ShopStrings.addItem) { beginDraft() }
                     .keyboardShortcut("n", modifiers: .command)
+                Button(ShopStrings.undo) { performUndo() }
+                    .keyboardShortcut("z", modifiers: .command)
                 Button(ShopStrings.itemSearch) { isSearchFocused = true }
                     .keyboardShortcut("f", modifiers: .command)
                 Button(ShopStrings.syncNow) { triggerSync() }
@@ -40,11 +67,17 @@ struct MacContentView: View {
             }
             .hidden()
         }
-        .onChange(of: dataStore.items) { _, items in
-            guard let selectedItemID else { return }
-            if !items.contains(where: { $0.id == selectedItemID }) {
-                self.selectedItemID = nil
-            }
+        .onChange(of: dataStore.items.map(\.id)) { _, _ in
+            pruneSelection()
+        }
+        .onChange(of: filteredItems.map(\.id)) { _, _ in
+            pruneSelection()
+        }
+        .onKeyPress(.space) {
+            handleCompletionKeyPress()
+        }
+        .onKeyPress(.return) {
+            handleCompletionKeyPress()
         }
     }
 
@@ -52,12 +85,18 @@ struct MacContentView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            quickAddBar
-                .padding(ShopTheme.spacingSM + 4)
-
-            Divider()
-
             List(selection: $dataStore.selectedFilter) {
+                Section {
+                    Button(action: beginDraft) {
+                        Label(ShopStrings.addItem, systemImage: "plus.circle")
+                            .foregroundStyle(ShopTheme.brandColor)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .help(ShopStrings.addItem)
+                    .accessibilityLabel(ShopStrings.addItem)
+                }
+
                 Section(ShopStrings.filter) {
                     ForEach(DataStore.FilterOption.allCases, id: \.self) { option in
                         Label(filterLabel(for: option), systemImage: iconForFilter(option))
@@ -67,6 +106,34 @@ struct MacContentView: View {
 
                 if !dataStore.tags.isEmpty {
                     Section(ShopStrings.tags) {
+                        Button {
+                            selectAllTagsFilter()
+                        } label: {
+                            HStack(spacing: ShopTheme.spacingSM) {
+                                Circle()
+                                    .fill(Color.black)
+                                    .frame(width: 10, height: 10)
+                                    .overlay {
+                                        Circle()
+                                            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 0.5)
+                                    }
+                                Text(ShopStrings.allTags)
+                                    .foregroundStyle(.primary)
+                                Spacer(minLength: 0)
+                                if dataStore.selectedTags.isEmpty {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(ShopTheme.brandColor)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(
+                            dataStore.selectedTags.isEmpty ? .isSelected : []
+                        )
+                        .accessibilityLabel(ShopStrings.allTags)
+
                         ForEach(dataStore.tags) { tag in
                             Button {
                                 toggleTagFilter(tag.id)
@@ -77,17 +144,20 @@ struct MacContentView: View {
                                         .frame(width: 10, height: 10)
                                     Text(tag.name)
                                         .foregroundStyle(.primary)
-                                    Spacer()
+                                    Spacer(minLength: 0)
                                     if dataStore.selectedTags.contains(tag.id) {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(ShopTheme.naturalGreen)
+                                            .foregroundStyle(ShopTheme.brandColor)
                                     }
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(
                                 dataStore.selectedTags.contains(tag.id) ? .isSelected : []
                             )
+                            .accessibilityLabel(tag.name)
                         }
                     }
                 }
@@ -100,46 +170,41 @@ struct MacContentView: View {
         .navigationTitle(ShopStrings.appName)
     }
 
-    private var quickAddBar: some View {
-        HStack(spacing: ShopTheme.spacingSM) {
-            TextField(ShopStrings.addItem, text: $newItemName)
-                .textFieldStyle(.roundedBorder)
-                .focused($isAddFocused)
-                .onSubmit(addItem)
-
-            Button(action: addItem) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(ShopTheme.naturalGreen)
-            }
-            .buttonStyle(.plain)
-            .disabled(newItemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .help(ShopStrings.addItem)
-        }
-    }
-
     // MARK: - Content Column
 
     private var contentColumn: some View {
         VStack(spacing: 0) {
-            if hasAnyItems {
+            if hasAnyItems || isDrafting {
                 searchBar
                     .padding(ShopTheme.spacingSM + 4)
             }
 
-            if filteredItems.isEmpty {
-                emptyList
+            if filteredItems.isEmpty && !isDrafting {
+                GeometryReader { proxy in
+                    ScrollView {
+                        emptyList
+                            .frame(maxHeight: .infinity)
+                            .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                    }
+                    .macPullToRefresh {
+                        await performManualSync()
+                    }
+                }
             } else {
                 MacItemListView(
                     filteredItems: filteredItems,
                     searchIsActive: !searchText.isEmpty,
-                    selectedItemID: $selectedItemID,
+                    selectedItemIDs: selectedItemIDs,
+                    isDrafting: isDrafting,
+                    onSelect: handleItemClick,
+                    onSelectDraft: selectDraftRow,
                     onToggleCompletion: toggleCompletion,
-                    onDeleteItem: deleteItem
+                    onDeleteItem: deleteItem,
+                    onRefresh: {
+                        await performManualSync()
+                    }
                 )
             }
-
-            statusBar
         }
         .navigationTitle(listTitle)
         .toolbar {
@@ -235,29 +300,48 @@ struct MacContentView: View {
         .padding(ShopTheme.spacingMD)
     }
 
-    private var statusBar: some View {
-        HStack {
-            Text(ShopStrings.pendingCount(dataStore.activeItems.count))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            if syncCoordinator.status.isSyncing {
-                ProgressView()
-                    .controlSize(.small)
-            }
-        }
-        .padding(.horizontal, ShopTheme.spacingMD)
-        .padding(.vertical, ShopTheme.spacingSM)
-        .background(.ultraThinMaterial)
-    }
-
     // MARK: - Detail Column
 
     @ViewBuilder
     private var detailColumn: some View {
-        if let selectedItemID, let item = item(for: selectedItemID) {
-            MacItemDetailView(itemID: selectedItemID)
-                .id(item.id)
+        if isDrafting {
+            MacDraftDetailView(
+                draftName: $draftName,
+                draftSelectedTags: $draftSelectedTags,
+                draftCreatedAt: $draftCreatedAt,
+                isTextFocused: $isDetailTextFocused,
+                onSave: commitDraft,
+                onDiscard: discardDraft
+            )
+        } else if selectedItemIDs.count > 1 {
+            MacBatchDetailView(
+                selectedItemIDs: selectedItemIDs,
+                onComplete: {
+                    dataStore.setCompleted(
+                        Array(selectedItemIDs),
+                        completed: true,
+                        presentUndo: undoCoordinator.present
+                    )
+                    completionHapticToken &+= 1
+                    ShopHaptics.itemCompleted()
+                },
+                onRestore: {
+                    dataStore.setCompleted(
+                        Array(selectedItemIDs),
+                        completed: false,
+                        presentUndo: undoCoordinator.present
+                    )
+                    restoreHapticToken &+= 1
+                    ShopHaptics.itemRestored()
+                },
+                onDelete: { showBatchDeleteConfirm = true }
+            )
+        } else if let selectedItemID = selectedItemIDs.first, item(for: selectedItemID) != nil {
+            MacItemDetailView(
+                itemID: selectedItemID,
+                isTextFocused: $isDetailTextFocused
+            )
+            .id(selectedItemID)
         } else {
             detailPlaceholder
         }
@@ -283,7 +367,7 @@ struct MacContentView: View {
         VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
             HStack(spacing: ShopTheme.spacingXS + 2) {
                 Circle()
-                    .fill(webdavSync.isConfigured ? ShopTheme.naturalGreen : Color.secondary)
+                    .fill(webdavSync.isConfigured ? ShopTheme.brandColor : Color.secondary)
                     .frame(width: 8, height: 8)
 
                 Text(
@@ -302,6 +386,7 @@ struct MacContentView: View {
                     } label: {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.caption)
+                            .rotationEffect(.degrees(syncSpin))
                     }
                     .buttonStyle(.plain)
                     .disabled(syncCoordinator.status.isSyncing)
@@ -323,6 +408,23 @@ struct MacContentView: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
+        }
+        .onAppear {
+            if syncCoordinator.status.isSyncing { startSyncSpin() }
+        }
+        .onChange(of: syncCoordinator.status.isSyncing) { _, isSyncing in
+            if isSyncing {
+                startSyncSpin()
+            } else {
+                withAnimation(.easeOut(duration: 0.25)) { syncSpin = 0 }
+            }
+        }
+    }
+
+    private func startSyncSpin() {
+        syncSpin = 0
+        withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
+            syncSpin = 360
         }
     }
 
@@ -353,18 +455,111 @@ struct MacContentView: View {
         dataStore.items.first { $0.id == id }
     }
 
-    private func focusAddField() {
-        isAddFocused = true
+    private func beginDraft() {
+        isDrafting = true
+        draftName = ""
+        draftSelectedTags = []
+        draftCreatedAt = Date()
+        selectedItemIDs = []
+        selectionAnchorID = nil
+        isDetailTextFocused = true
     }
 
-    private func addItem() {
-        let name = newItemName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else {
-            focusAddField()
-            return
+    private func discardDraft() {
+        isDrafting = false
+        draftName = ""
+        draftSelectedTags = []
+        draftCreatedAt = Date()
+        isDetailTextFocused = false
+    }
+
+    private func commitDraft() {
+        let name = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let tags = dataStore.tags.filter { draftSelectedTags.contains($0.id) }
+        let beforeIDs = Set(dataStore.items.map(\.id))
+        dataStore.addItem(name: name, tags: tags, createdAt: draftCreatedAt)
+        discardDraft()
+        if let created = dataStore.items.first(where: { !beforeIDs.contains($0.id) && $0.name == name }) {
+            selectedItemIDs = [created.id]
+            selectionAnchorID = created.id
+        } else if let fallback = dataStore.items.first(where: { $0.name == name }) {
+            selectedItemIDs = [fallback.id]
+            selectionAnchorID = fallback.id
         }
-        dataStore.addItem(name: name)
-        newItemName = ""
+    }
+
+    private func selectDraftRow() {
+        selectedItemIDs = []
+        selectionAnchorID = nil
+        isDrafting = true
+    }
+
+    private func handleItemClick(_ item: ShoppingItem) {
+        if isDrafting {
+            discardDraft()
+        }
+        let modifiers = currentClickModifiers()
+        let ordered = ItemSelection.visualOrderedIDs(
+            from: ItemListSections.derive(
+                from: filteredItems,
+                groupOption: dataStore.groupOption
+            )
+        )
+        let command = modifiers.contains(.command)
+        let shift = modifiers.contains(.shift)
+
+        if shift, let anchor = selectionAnchorID {
+            let range = ItemSelection.range(from: anchor, to: item.id, in: ordered)
+            if command {
+                selectedItemIDs.formUnion(range)
+            } else {
+                selectedItemIDs = Set(range)
+            }
+        } else if command {
+            if selectedItemIDs.contains(item.id) {
+                selectedItemIDs.remove(item.id)
+            } else {
+                selectedItemIDs.insert(item.id)
+            }
+            selectionAnchorID = item.id
+        } else {
+            selectedItemIDs = [item.id]
+            selectionAnchorID = item.id
+        }
+    }
+
+    private func currentClickModifiers() -> EventModifiers {
+        var mods: EventModifiers = []
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.shift) { mods.insert(.shift) }
+        if flags.contains(.command) { mods.insert(.command) }
+        return mods
+    }
+
+    private func pruneSelection() {
+        let visible = Set(filteredItems.map(\.id))
+        selectedItemIDs = ItemSelection.prunedSelection(selectedItemIDs, visibleIDs: visible)
+        if let anchor = selectionAnchorID, !selectedItemIDs.contains(anchor) {
+            selectionAnchorID = selectedItemIDs.first
+        }
+    }
+
+    private func handleCompletionKeyPress() -> KeyPress.Result {
+        guard !isDetailTextFocused, !isSearchFocused, !isDrafting else {
+            return .ignored
+        }
+        guard selectedItemIDs.count == 1,
+              let selectedItemID = selectedItemIDs.first,
+              let item = item(for: selectedItemID) else {
+            return .ignored
+        }
+        toggleCompletion(item)
+        return .handled
+    }
+
+    private func selectAllTagsFilter() {
+        dataStore.selectedTags = []
     }
 
     private func toggleTagFilter(_ id: UUID) {
@@ -383,27 +578,46 @@ struct MacContentView: View {
             presentUndo: undoCoordinator.present
         )
         if willComplete {
+            completionHapticToken &+= 1
             ShopHaptics.itemCompleted()
         } else {
+            restoreHapticToken &+= 1
             ShopHaptics.itemRestored()
         }
     }
 
     private func deleteItem(_ item: ShoppingItem) {
-        if selectedItemID == item.id {
-            selectedItemID = nil
+        selectedItemIDs.remove(item.id)
+        if selectionAnchorID == item.id {
+            selectionAnchorID = selectedItemIDs.first
         }
         dataStore.deleteItem(item, presentUndo: undoCoordinator.present)
     }
 
     private func deleteSelectedItem() {
-        guard let selectedItemID, let item = item(for: selectedItemID) else { return }
+        guard !isDrafting else {
+            discardDraft()
+            return
+        }
+        if selectedItemIDs.count > 1 {
+            showBatchDeleteConfirm = true
+            return
+        }
+        guard let selectedItemID = selectedItemIDs.first, let item = item(for: selectedItemID) else { return }
         deleteItem(item)
     }
 
     private func triggerSync() {
         guard webdavSync.isConfigured, !syncCoordinator.status.isSyncing else { return }
-        Task { await syncCoordinator.syncNow() }
+        Task { await performManualSync() }
+    }
+
+    /// Shared by pull-to-refresh, ⌘R, and the sidebar sync button.
+    private func performManualSync() async {
+        guard webdavSync.isConfigured else { return }
+        refreshHapticToken &+= 1
+        ShopHaptics.pullToRefreshTriggered()
+        await syncCoordinator.syncNow()
     }
 
     private func performUndo() {
@@ -442,9 +656,13 @@ struct MacContentView: View {
 private struct MacItemListView: View {
     let filteredItems: [ShoppingItem]
     let searchIsActive: Bool
-    @Binding var selectedItemID: UUID?
+    let selectedItemIDs: Set<UUID>
+    let isDrafting: Bool
+    let onSelect: (ShoppingItem) -> Void
+    let onSelectDraft: () -> Void
     let onToggleCompletion: (ShoppingItem) -> Void
     let onDeleteItem: (ShoppingItem) -> Void
+    let onRefresh: () async -> Void
 
     @EnvironmentObject private var dataStore: DataStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -472,14 +690,22 @@ private struct MacItemListView: View {
     }
 
     var body: some View {
-        List(selection: $selectedItemID) {
+        List {
+            if isDrafting {
+                Section {
+                    MacDraftRow()
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onSelectDraft)
+                        .listRowBackground(ShopTheme.brandColor.opacity(0.12))
+                }
+            }
+
             if sections.isGrouped {
                 ForEach(sections.activeGroups) { group in
                     Section {
                         ForEach(group.itemIDs, id: \.self) { itemID in
                             if let item = itemLookup[itemID] {
                                 row(for: item)
-                                    .tag(itemID)
                             }
                         }
                     } header: {
@@ -500,7 +726,6 @@ private struct MacItemListView: View {
                     ForEach(sections.archivedIDs, id: \.self) { itemID in
                         if let item = itemLookup[itemID] {
                             row(for: item)
-                                .tag(itemID)
                         }
                     }
                 } header: {
@@ -513,6 +738,9 @@ private struct MacItemListView: View {
         }
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
+        .macPullToRefresh {
+            await onRefresh()
+        }
         .animation(reduceMotion ? nil : .default, value: sections.displayRows)
     }
 
@@ -521,7 +749,6 @@ private struct MacItemListView: View {
         let rows = ForEach(sections.activeIDs, id: \.self) { itemID in
             if let item = itemLookup[itemID] {
                 row(for: item)
-                    .tag(itemID)
             }
         }
         if canReorder {
@@ -534,10 +761,10 @@ private struct MacItemListView: View {
     private func row(for item: ShoppingItem) -> some View {
         MacItemRow(
             item: item,
-            isSelected: selectedItemID == item.id,
-            onToggleCompletion: { onToggleCompletion(item) }
+            isSelected: selectedItemIDs.contains(item.id),
+            onToggleCompletion: { onToggleCompletion(item) },
+            onSelect: { onSelect(item) }
         )
-        // 左滑（trailing）：删除
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 onDeleteItem(item)
@@ -545,7 +772,6 @@ private struct MacItemListView: View {
                 Label(ShopStrings.deleteItem, systemImage: "trash")
             }
         }
-        // 右滑（leading）：完成/恢复
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 onToggleCompletion(item)
@@ -555,7 +781,7 @@ private struct MacItemListView: View {
                     systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
                 )
             }
-            .tint(ShopTheme.brandRed)
+            .tint(ShopTheme.brandColor)
         }
         .contextMenu {
             Button(role: .destructive) {
@@ -573,10 +799,28 @@ private struct MacItemListView: View {
 
 // MARK: - Item Row
 
+private struct MacDraftRow: View {
+    var body: some View {
+        HStack(spacing: ShopTheme.spacingSM + 4) {
+            Circle()
+                .stroke(Color.secondary.opacity(0.35), lineWidth: 2)
+                .frame(width: 20, height: 20)
+
+            Text(String(localized: "mac.draft_placeholder"))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, ShopTheme.spacingXS)
+    }
+}
+
 private struct MacItemRow: View {
     let item: ShoppingItem
     let isSelected: Bool
     let onToggleCompletion: () -> Void
+    let onSelect: () -> Void
 
     var body: some View {
         HStack(spacing: ShopTheme.spacingSM + 4) {
@@ -586,31 +830,34 @@ private struct MacItemRow: View {
             .buttonStyle(.plain)
             .help(item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete)
 
-            VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
-                Text(item.name)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(item.isCompleted ? .secondary : .primary)
-                    .strikethrough(item.isCompleted, color: .secondary)
-                    .lineLimit(2)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
+                    Text(item.name)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                        .strikethrough(item.isCompleted, color: .secondary)
+                        .lineLimit(2)
 
-                if !item.tags.isEmpty {
-                    MacTagRow(tags: item.tags)
+                    if !item.tags.isEmpty {
+                        MacTagRow(tags: item.tags)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if item.isCompleted, let completedAt = item.completedAt {
+                    Text(completedAt, style: .date)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
-
-            Spacer(minLength: 0)
-
-            if item.isCompleted, let completedAt = item.completedAt {
-                Text(completedAt, style: .date)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onSelect)
         }
         .padding(.vertical, ShopTheme.spacingXS)
-        .contentShape(Rectangle())
         .listRowBackground(
             isSelected
-                ? ShopTheme.naturalGreen.opacity(0.12)
+                ? ShopTheme.brandColor.opacity(0.12)
                 : Color.clear
         )
     }
@@ -623,14 +870,14 @@ private struct MacCompletionControl: View {
         ZStack {
             Circle()
                 .stroke(
-                    isCompleted ? ShopTheme.naturalGreen : Color.secondary.opacity(0.35),
+                    isCompleted ? ShopTheme.brandColor : Color.secondary.opacity(0.35),
                     lineWidth: 2
                 )
                 .frame(width: 20, height: 20)
 
             if isCompleted {
                 Circle()
-                    .fill(ShopTheme.naturalGreen)
+                    .fill(ShopTheme.brandColor)
                     .frame(width: 20, height: 20)
                 Image(systemName: "checkmark")
                     .font(.system(size: 9, weight: .bold))
@@ -660,15 +907,191 @@ private struct MacTagRow: View {
     }
 }
 
+// MARK: - Draft Detail
+
+private struct MacBatchDetailView: View {
+    let selectedItemIDs: Set<UUID>
+    let onComplete: () -> Void
+    let onRestore: () -> Void
+    let onDelete: () -> Void
+
+    @EnvironmentObject private var dataStore: DataStore
+    @EnvironmentObject private var undoCoordinator: UndoCoordinator
+
+    private var selectedItems: [ShoppingItem] {
+        dataStore.items.filter { selectedItemIDs.contains($0.id) }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ShopTheme.spacingMD) {
+                Text(ShopStrings.selectionCount(selectedItemIDs.count))
+                    .font(.title2.weight(.semibold))
+
+                VStack(alignment: .leading, spacing: ShopTheme.spacingSM) {
+                    Button(action: onComplete) {
+                        Label(ShopStrings.selectionMarkAllComplete, systemImage: "checkmark.circle")
+                    }
+                    Button(action: onRestore) {
+                        Label(ShopStrings.selectionMarkAllIncomplete, systemImage: "arrow.uturn.backward.circle")
+                    }
+                    Button(role: .destructive, action: onDelete) {
+                        Label(ShopStrings.deleteItem, systemImage: "trash")
+                    }
+                }
+                .buttonStyle(.bordered)
+
+                Divider()
+
+                Text(ShopStrings.selectionEditTags)
+                    .font(.headline)
+
+                ForEach(dataStore.tags, id: \.id) { tag in
+                    let membership = ItemSelection.membership(
+                        of: tag.id,
+                        in: selectedItems.map { ($0.id, Set($0.tags.map(\.id))) }
+                    )
+                    Button {
+                        apply(tag: tag, membership: membership)
+                    } label: {
+                        HStack {
+                            Circle()
+                                .fill(tag.displayColor)
+                                .frame(width: 10, height: 10)
+                            Text(tag.name)
+                            Spacer()
+                            Image(systemName: symbol(for: membership))
+                                .foregroundStyle(ShopTheme.brandColor)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(accessibility(for: membership))
+                    .accessibilityLabel(tag.name)
+                    .accessibilityValue(accessibility(for: membership))
+                }
+            }
+            .padding(ShopTheme.spacingMD)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func symbol(for membership: TagMembership) -> String {
+        switch membership {
+        case .all: "checkmark.circle.fill"
+        case .some: "minus.circle.fill"
+        case .none: "circle"
+        }
+    }
+
+    private func accessibility(for membership: TagMembership) -> String {
+        switch membership {
+        case .all: ShopStrings.selectionTagAll
+        case .some: ShopStrings.selectionTagSome
+        case .none: ShopStrings.selectionTagNone
+        }
+    }
+
+    private func apply(tag: Tag, membership: TagMembership) {
+        let ids = Array(selectedItemIDs)
+        switch membership {
+        case .all:
+            dataStore.removeTag(tag, fromItemIDs: ids, presentUndo: undoCoordinator.present)
+        case .some, .none:
+            dataStore.addTag(tag, toItemIDs: ids, presentUndo: undoCoordinator.present)
+        }
+        ShopHaptics.itemRestored()
+    }
+}
+
+private struct MacDraftDetailView: View {
+    @Binding var draftName: String
+    @Binding var draftSelectedTags: Set<UUID>
+    @Binding var draftCreatedAt: Date
+    @Binding var isTextFocused: Bool
+    let onSave: () -> Void
+    let onDiscard: () -> Void
+
+    @EnvironmentObject private var dataStore: DataStore
+    @FocusState private var isNameFocused: Bool
+
+    var body: some View {
+        Form {
+            Section {
+                TextField(ShopStrings.itemName, text: $draftName)
+                    .focused($isNameFocused)
+                    .onSubmit(onSave)
+            }
+
+            if !dataStore.tags.isEmpty {
+                Section(ShopStrings.tags) {
+                    ForEach(dataStore.tags) { tag in
+                        Toggle(isOn: tagBinding(tag.id)) {
+                            HStack(spacing: ShopTheme.spacingSM) {
+                                Circle()
+                                    .fill(tag.displayColor)
+                                    .frame(width: 10, height: 10)
+                                Text(tag.name)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                }
+            }
+
+            Section {
+                DatePicker(
+                    ShopStrings.addedAt,
+                    selection: $draftCreatedAt,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+            }
+
+            Section {
+                Button(ShopStrings.saveItem, action: onSave)
+                    .disabled(draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(ShopStrings.discardChanges, role: .destructive, action: onDiscard)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle(ShopStrings.addItem)
+        .onAppear {
+            isNameFocused = true
+            isTextFocused = true
+        }
+        .onChange(of: isNameFocused) { _, focused in
+            isTextFocused = focused
+        }
+    }
+
+    private func tagBinding(_ id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { draftSelectedTags.contains(id) },
+            set: { isOn in
+                var next = draftSelectedTags
+                if isOn {
+                    next.insert(id)
+                } else {
+                    next.remove(id)
+                }
+                draftSelectedTags = next
+            }
+        )
+    }
+}
+
 // MARK: - Detail Editor
 
 private struct MacItemDetailView: View {
     let itemID: UUID
+    @Binding var isTextFocused: Bool
 
     @EnvironmentObject private var dataStore: DataStore
 
     @State private var itemName = ""
     @State private var selectedTags: Set<UUID> = []
+    @State private var createdAt = Date()
+    @State private var completedAt = Date()
     @FocusState private var isNameFocused: Bool
 
     private var item: ShoppingItem? {
@@ -702,13 +1125,17 @@ private struct MacItemDetailView: View {
                     }
 
                     Section {
-                        if item.isCompleted, let completedAt = item.completedAt {
-                            LabeledContent(ShopStrings.filterCompleted) {
-                                Text(completedAt.formatted(date: .abbreviated, time: .shortened))
-                            }
-                        }
-                        LabeledContent(ShopStrings.addedAt) {
-                            Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        DatePicker(
+                            ShopStrings.addedAt,
+                            selection: $createdAt,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        if item.isCompleted {
+                            DatePicker(
+                                ShopStrings.completedAtLabel,
+                                selection: $completedAt,
+                                displayedComponents: [.date, .hourAndMinute]
+                            )
                         }
                     }
                 }
@@ -722,6 +1149,15 @@ private struct MacItemDetailView: View {
                 }
                 .onChange(of: selectedTags) { _, _ in
                     save(item)
+                }
+                .onChange(of: createdAt) { _, _ in
+                    save(item)
+                }
+                .onChange(of: completedAt) { _, _ in
+                    save(item)
+                }
+                .onChange(of: isNameFocused) { _, focused in
+                    isTextFocused = focused
                 }
             } else {
                 ContentUnavailableView(
@@ -738,11 +1174,13 @@ private struct MacItemDetailView: View {
         Binding(
             get: { selectedTags.contains(id) },
             set: { isOn in
+                var next = selectedTags
                 if isOn {
-                    selectedTags.insert(id)
+                    next.insert(id)
                 } else {
-                    selectedTags.remove(id)
+                    next.remove(id)
                 }
+                selectedTags = next
             }
         )
     }
@@ -750,12 +1188,25 @@ private struct MacItemDetailView: View {
     private func syncFromItem(_ item: ShoppingItem) {
         itemName = item.name
         selectedTags = Set(item.tags.map(\.id))
+        createdAt = item.createdAt
+        completedAt = item.completedAt ?? item.createdAt
     }
 
     private func syncFromItemIfNeeded(_ item: ShoppingItem) {
         let storeTags = Set(item.tags.map(\.id))
         let trimmed = itemName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed == item.name, selectedTags == storeTags {
+        let createdMatches = Calendar.current.isDate(createdAt, equalTo: item.createdAt, toGranularity: .minute)
+        let completedMatches: Bool
+        if item.isCompleted {
+            completedMatches = Calendar.current.isDate(
+                completedAt,
+                equalTo: item.completedAt ?? item.createdAt,
+                toGranularity: .minute
+            )
+        } else {
+            completedMatches = true
+        }
+        if trimmed == item.name, selectedTags == storeTags, createdMatches, completedMatches {
             return
         }
         syncFromItem(item)
@@ -770,8 +1221,26 @@ private struct MacItemDetailView: View {
             return trimmed == item.name ? nil : trimmed
         }()
         let tagsUpdate: [Tag]? = selectedTags == originalTags ? nil : tags
-        guard nameUpdate != nil || tagsUpdate != nil else { return }
-        dataStore.updateItem(item, name: nameUpdate, tags: tagsUpdate)
+        let createdChanged = !Calendar.current.isDate(createdAt, equalTo: item.createdAt, toGranularity: .minute)
+        let completedChanged: Bool
+        if item.isCompleted {
+            completedChanged = !Calendar.current.isDate(
+                completedAt,
+                equalTo: item.completedAt ?? item.createdAt,
+                toGranularity: .minute
+            )
+        } else {
+            completedChanged = false
+        }
+        guard nameUpdate != nil || tagsUpdate != nil || createdChanged || completedChanged else { return }
+        dataStore.updateItem(
+            item,
+            name: nameUpdate,
+            tags: tagsUpdate,
+            createdAt: createdChanged ? createdAt : nil,
+            completedAt: item.isCompleted && completedChanged ? completedAt : nil,
+            updateCompletedAt: item.isCompleted && completedChanged
+        )
     }
 }
 
@@ -793,6 +1262,69 @@ private extension View {
 }
 
 #if os(macOS)
+/// macOS `.refreshable` mainly wires ⌘R / View → Refresh, not trackpad pull.
+/// This adds an actual overscroll-triggered refresh for List / ScrollView.
+private struct MacPullToRefreshModifier: ViewModifier {
+    let onRefresh: () async -> Void
+
+    @State private var isRefreshing = false
+    @State private var hasArmed = false
+    @State private var pullDistance: CGFloat = 0
+
+    /// Keep below typical macOS rubber-band travel; old 52pt often never fired.
+    private let armThreshold: CGFloat = 20
+    private let releaseThreshold: CGFloat = 10
+
+    func body(content: Content) -> some View {
+        content
+            .scrollBounceBehavior(.always)
+            .refreshable {
+                await onRefresh()
+            }
+            .overlay(alignment: .top) {
+                if isRefreshing || hasArmed {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(.top, 10)
+                        .allowsHitTesting(false)
+                }
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                // Rubber-banding past the top makes contentOffset.y negative on macOS List/ScrollView.
+                -geometry.contentOffset.y
+            } action: { _, rawOverscroll in
+                let distance = max(0, rawOverscroll)
+                pullDistance = distance
+
+                if !isRefreshing && !hasArmed && distance >= armThreshold {
+                    hasArmed = true
+                    ShopHaptics.pullToRefreshArmed()
+                }
+
+                // Fire on release after a deep enough pull — not on every bounce frame.
+                if hasArmed && !isRefreshing && distance < releaseThreshold {
+                    hasArmed = false
+                    isRefreshing = true
+                    Task { @MainActor in
+                        await onRefresh()
+                        isRefreshing = false
+                        pullDistance = 0
+                    }
+                }
+
+                if !hasArmed && !isRefreshing && distance < releaseThreshold {
+                    pullDistance = 0
+                }
+            }
+    }
+}
+
+private extension View {
+    func macPullToRefresh(action: @escaping () async -> Void) -> some View {
+        modifier(MacPullToRefreshModifier(onRefresh: action))
+    }
+}
+
 struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode

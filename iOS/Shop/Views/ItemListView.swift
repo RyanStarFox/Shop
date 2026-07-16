@@ -4,10 +4,14 @@ import ShopCore
 struct ItemListView: View {
     let filteredItems: [ShoppingItem]
     let searchIsActive: Bool
+    let isSelecting: Bool
+    @Binding var selectedItemIDs: Set<UUID>
+    let onEnterSelection: (ShoppingItem) -> Void
     let onEditItem: (ShoppingItem) -> Void
 
     @EnvironmentObject private var dataStore: DataStore
     @EnvironmentObject private var undoCoordinator: UndoCoordinator
+    @EnvironmentObject private var syncCoordinator: SyncCoordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var sections: ItemListSections {
@@ -18,7 +22,7 @@ struct ItemListView: View {
     }
 
     private var canReorder: Bool {
-        ItemListReorderPolicy.canReorder(
+        !isSelecting && ItemListReorderPolicy.canReorder(
             filter: dataStore.selectedFilter,
             selectedTags: dataStore.selectedTags,
             dateRange: dataStore.dateRange,
@@ -74,6 +78,9 @@ struct ItemListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .refreshable {
+            await syncCoordinator.syncNowIfConfigured()
+        }
         .animation(reduceMotion ? nil : .default, value: sections.displayRows)
     }
 
@@ -93,33 +100,53 @@ struct ItemListView: View {
 
     @ViewBuilder
     private func itemRow(_ item: ShoppingItem) -> some View {
+        let isSelected = selectedItemIDs.contains(item.id)
         ItemRow(
             item: item,
+            isSelecting: isSelecting,
+            isSelected: isSelected,
             onToggleCompletion: { toggleCompletion(for: item) },
-            onEdit: { onEditItem(item) }
+            onEdit: { onEditItem(item) },
+            onToggleSelection: { toggleSelection(for: item) }
         )
         .listRowBackground(Color.clear)
         .listRowSeparator(.visible)
-        // 左滑（trailing）：删除
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .onLongPressGesture {
+            guard !isSelecting else { return }
+            onEnterSelection(item)
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                deleteItem(item)
-            } label: {
-                Label(ShopStrings.deleteItem, systemImage: "trash")
+            if !isSelecting {
+                Button(role: .destructive) {
+                    deleteItem(item)
+                } label: {
+                    Label(ShopStrings.deleteItem, systemImage: "trash")
+                }
             }
         }
-        // 右滑（leading）：完成/恢复
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                toggleCompletion(for: item)
-            } label: {
-                Label(
-                    item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete,
-                    systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
-                )
+            if !isSelecting {
+                Button {
+                    toggleCompletion(for: item)
+                } label: {
+                    Label(
+                        item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete,
+                        systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
+                    )
+                }
+                .tint(ShopTheme.brandColor)
             }
-            .tint(ShopTheme.brandRed)
         }
+    }
+
+    private func toggleSelection(for item: ShoppingItem) {
+        if selectedItemIDs.contains(item.id) {
+            selectedItemIDs.remove(item.id)
+        } else {
+            selectedItemIDs.insert(item.id)
+        }
+        ShopHaptics.itemRestored()
     }
 
     private func toggleCompletion(for item: ShoppingItem) {
@@ -153,21 +180,38 @@ struct ItemListView: View {
 
 struct ItemRow: View {
     let item: ShoppingItem
+    let isSelecting: Bool
+    let isSelected: Bool
     let onToggleCompletion: () -> Void
     let onEdit: () -> Void
+    let onToggleSelection: () -> Void
 
     var body: some View {
         HStack(spacing: ShopTheme.spacingSM + 4) {
-            Button(action: onToggleCompletion) {
-                CompletionControl(isCompleted: item.isCompleted)
+            if isSelecting {
+                Button(action: onToggleSelection) {
+                    SelectionControl(isSelected: isSelected)
+                }
+                .buttonStyle(.plain)
+                .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
+            } else {
+                Button(action: onToggleCompletion) {
+                    CompletionControl(isCompleted: item.isCompleted)
+                }
+                .buttonStyle(.plain)
+                .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
+                .accessibilityLabel(
+                    item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete
+                )
             }
-            .buttonStyle(.plain)
-            .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
-            .accessibilityLabel(
-                item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete
-            )
 
-            Button(action: onEdit) {
+            Button(action: {
+                if isSelecting {
+                    onToggleSelection()
+                } else {
+                    onEdit()
+                }
+            }) {
                 HStack(alignment: .top, spacing: ShopTheme.spacingSM) {
                     VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
                         Text(item.name)
@@ -201,7 +245,7 @@ struct ItemRow: View {
             .buttonStyle(.plain)
             .frame(minHeight: ShopTheme.minTouchTarget)
             .accessibilityLabel(itemAccessibilityLabel)
-            .accessibilityHint(ShopStrings.editItem)
+            .accessibilityHint(isSelecting ? ShopStrings.selectionSelect : ShopStrings.editItem)
         }
         .padding(.vertical, ShopTheme.spacingXS)
     }
@@ -224,6 +268,30 @@ struct ItemRow: View {
     }
 }
 
+private struct SelectionControl: View {
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(
+                    isSelected ? ShopTheme.brandColor : Color.secondary.opacity(0.35),
+                    lineWidth: 2
+                )
+                .frame(width: 24, height: 24)
+
+            if isSelected {
+                Circle()
+                    .fill(ShopTheme.brandColor)
+                    .frame(width: 24, height: 24)
+                Image(systemName: "checkmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+}
+
 private struct CompletionControl: View {
     let isCompleted: Bool
 
@@ -231,14 +299,14 @@ private struct CompletionControl: View {
         ZStack {
             Circle()
                 .stroke(
-                    isCompleted ? ShopTheme.brandRed : Color.secondary.opacity(0.35),
+                    isCompleted ? ShopTheme.brandColor : Color.secondary.opacity(0.35),
                     lineWidth: 2
                 )
                 .frame(width: 24, height: 24)
 
             if isCompleted {
                 Circle()
-                    .fill(ShopTheme.brandRed)
+                    .fill(ShopTheme.brandColor)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
                     .font(.caption2.weight(.bold))

@@ -31,6 +31,49 @@ public enum ShopStrings {
     public static var editItem: String {
         NSLocalizedString("item.edit", comment: "Edit item")
     }
+    public static var selectionSelect: String {
+        NSLocalizedString("selection.select", bundle: .module, comment: "Enter multi-select")
+    }
+    public static var selectionDone: String {
+        NSLocalizedString("selection.done", bundle: .module, comment: "Exit multi-select")
+    }
+    public static func selectionCount(_ count: Int) -> String {
+        String(
+            format: NSLocalizedString("selection.count", bundle: .module, comment: "Selected count"),
+            count
+        )
+    }
+    public static var selectionMarkAllComplete: String {
+        NSLocalizedString("selection.mark_all_complete", bundle: .module, comment: "Mark all complete")
+    }
+    public static var selectionMarkAllIncomplete: String {
+        NSLocalizedString("selection.mark_all_incomplete", bundle: .module, comment: "Restore all")
+    }
+    public static var selectionEditTags: String {
+        NSLocalizedString("selection.edit_tags", bundle: .module, comment: "Batch edit tags")
+    }
+    public static var selectionDeleteConfirmTitle: String {
+        NSLocalizedString("selection.delete_confirm_title", bundle: .module, comment: "Delete confirm title")
+    }
+    public static func selectionDeleteConfirmMessage(_ count: Int) -> String {
+        String(
+            format: NSLocalizedString(
+                "selection.delete_confirm_message",
+                bundle: .module,
+                comment: "Delete confirm message"
+            ),
+            count
+        )
+    }
+    public static var selectionTagAll: String {
+        NSLocalizedString("selection.tag_all", bundle: .module, comment: "Tag owned by all selected")
+    }
+    public static var selectionTagSome: String {
+        NSLocalizedString("selection.tag_some", bundle: .module, comment: "Tag owned by some selected")
+    }
+    public static var selectionTagNone: String {
+        NSLocalizedString("selection.tag_none", bundle: .module, comment: "Tag owned by none selected")
+    }
     public static var saveItem: String {
         NSLocalizedString("item.save", comment: "Save item")
     }

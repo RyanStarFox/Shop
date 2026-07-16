@@ -4,6 +4,7 @@ import ShopCore
 struct ContentView: View {
     @EnvironmentObject private var dataStore: DataStore
     @EnvironmentObject private var undoCoordinator: UndoCoordinator
+    @EnvironmentObject private var syncCoordinator: SyncCoordinator
 
     @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
     @State private var editorMode: ItemEditorView.Mode?
@@ -11,6 +12,10 @@ struct ContentView: View {
     @State private var showFilter = false
     @State private var searchText = ""
     @State private var undoError: String?
+    @State private var isSelecting = false
+    @State private var selectedItemIDs: Set<UUID> = []
+    @State private var showBatchTags = false
+    @State private var showBatchDeleteConfirm = false
 
     var body: some View {
         NavigationStack {
@@ -41,6 +46,13 @@ struct ContentView: View {
                             ItemListView(
                                 filteredItems: filteredItems,
                                 searchIsActive: !searchText.isEmpty,
+                                isSelecting: isSelecting,
+                                selectedItemIDs: $selectedItemIDs,
+                                onEnterSelection: { item in
+                                    isSelecting = true
+                                    selectedItemIDs = [item.id]
+                                    ShopHaptics.itemRestored()
+                                },
                                 onEditItem: { item in
                                     editorMode = .edit(item)
                                 }
@@ -49,23 +61,47 @@ struct ContentView: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    HStack {
-                        Spacer(minLength: 0)
-                        Button {
-                            editorMode = .add
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 56, height: 56)
-                                .background(ShopTheme.brandRed, in: Circle())
-                                .shadow(color: ShopTheme.brandRed.opacity(0.35), radius: 10, y: 4)
+                    if isSelecting {
+                        BatchActionBar(
+                            selectedCount: selectedItemIDs.count,
+                            onComplete: {
+                                dataStore.setCompleted(
+                                    Array(selectedItemIDs),
+                                    completed: true,
+                                    presentUndo: undoCoordinator.present
+                                )
+                                ShopHaptics.itemCompleted()
+                            },
+                            onRestore: {
+                                dataStore.setCompleted(
+                                    Array(selectedItemIDs),
+                                    completed: false,
+                                    presentUndo: undoCoordinator.present
+                                )
+                                ShopHaptics.itemRestored()
+                            },
+                            onTags: { showBatchTags = true },
+                            onDelete: { showBatchDeleteConfirm = true }
+                        )
+                    } else {
+                        HStack {
+                            Spacer(minLength: 0)
+                            Button {
+                                editorMode = .add
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.title2.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 56, height: 56)
+                                    .background(ShopTheme.brandColor, in: Circle())
+                                    .shadow(color: ShopTheme.brandColor.opacity(0.35), radius: 10, y: 4)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(ShopStrings.addItem)
+                            Spacer(minLength: 0)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(ShopStrings.addItem)
-                        Spacer(minLength: 0)
+                        .padding(.bottom, ShopTheme.spacingSM)
                     }
-                    .padding(.bottom, ShopTheme.spacingSM)
                 }
                 .navigationTitle(ShopStrings.appName)
                 .navigationBarTitleDisplayMode(.inline)
@@ -124,6 +160,17 @@ struct ContentView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         HStack(spacing: ShopTheme.spacingSM) {
+                            if !filteredItems.isEmpty {
+                                Button(isSelecting ? ShopStrings.selectionDone : ShopStrings.selectionSelect) {
+                                    if isSelecting {
+                                        isSelecting = false
+                                        selectedItemIDs = []
+                                    } else {
+                                        isSelecting = true
+                                    }
+                                }
+                            }
+
                             Button {
                                 performUndo()
                             } label: {
@@ -142,6 +189,32 @@ struct ContentView: View {
                         }
                     }
                 }
+                .onChange(of: filteredItems.map(\.id)) { _, ids in
+                    selectedItemIDs = ItemSelection.prunedSelection(selectedItemIDs, visibleIDs: Set(ids))
+                    if isSelecting, selectedItemIDs.isEmpty {
+                        isSelecting = false
+                    }
+                }
+                .alert(ShopStrings.selectionDeleteConfirmTitle, isPresented: $showBatchDeleteConfirm) {
+                    Button(ShopStrings.deleteItem, role: .destructive) {
+                        dataStore.deleteItems(
+                            Array(selectedItemIDs),
+                            presentUndo: undoCoordinator.present
+                        )
+                        selectedItemIDs = []
+                        isSelecting = false
+                    }
+                    Button(ShopStrings.dismiss, role: .cancel) {}
+                } message: {
+                    Text(ShopStrings.selectionDeleteConfirmMessage(selectedItemIDs.count))
+                }
+                .sheet(isPresented: $showBatchTags) {
+                    BatchTagEditorView(selectedItemIDs: selectedItemIDs)
+                        .environmentObject(dataStore)
+                        .environmentObject(undoCoordinator)
+                        .presentationDetents([.medium, .large])
+                        .presentationCornerRadius(ShopTheme.spacingLG)
+                }
                 .alert(ShopStrings.undo, isPresented: Binding(
                     get: { undoError != nil },
                     set: { if !$0 { undoError = nil } }
@@ -151,7 +224,7 @@ struct ContentView: View {
                     Text(undoError ?? "")
                 }
         }
-        .tint(ShopTheme.brandRed)
+        .tint(ShopTheme.brandColor)
         .sheet(item: $editorMode) { mode in
             ItemEditorView(mode: mode)
                 .presentationDetents([.medium, .large])

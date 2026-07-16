@@ -7,6 +7,17 @@
 "undo.batch_items_changed" = "撤销批量更改";
 "undo.batch_items_deleted" = "撤销批量删除";
 "undo.batch_tags_changed" = "撤销标签更改";
+"selection.select" = "选择";
+"selection.done" = "完成";
+"selection.count" = "已选 %d 项";
+"selection.mark_all_complete" = "全部标为完成";
+"selection.mark_all_incomplete" = "全部恢复";
+"selection.edit_tags" = "标签";
+"selection.delete_confirm_title" = "删除物品？";
+"selection.delete_confirm_message" = "删除已选的 %d 项？";
+"selection.tag_all" = "全部已选拥有此标签";
+"selection.tag_some" = "部分已选拥有此标签";
+"selection.tag_none" = "已选均无此标签";
 "common.dismiss" = "好";
 "common.cancel" = "取消";
 "appearance.system" = "跟随系统";
