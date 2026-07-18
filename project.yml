@@ -126,11 +126,11 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        # Team ID prefix avoids Sequoia “access other apps’ data” on every launch.
+        # Legacy unprefixed group kept only for one-time migration.
         com.apple.security.application-groups:
+          - H6AYG25QVN.group.com.ryanstarfox.shop
           - group.com.ryanstarfox.shop
-        # One-time copy of pre-sandbox SwiftData files from unsandboxed Application Support.
-        com.apple.security.temporary-exception.files.home-relative-path.read-only:
-          - /Library/Application Support/
 
   ShopWidget:
     type: app-extension
@@ -189,7 +189,7 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-          - group.com.ryanstarfox.shop
+          - H6AYG25QVN.group.com.ryanstarfox.shop
 
   # Shared Tests
   ShopCoreTests:

@@ -2,7 +2,16 @@ import Foundation
 
 /// Shared pending-item snapshot for Home Screen / Desktop widgets via App Group.
 public enum WidgetSnapshotStore {
+    /// iOS-style `group.*` IDs are fine on iOS. On macOS Sequoia+, non–Mac App Store
+    /// builds must use a Team ID–prefixed group or every `containerURL(forSecurityApplicationGroupIdentifier:)`
+    /// call triggers a transient “access data from other apps” TCC prompt.
+    #if os(macOS)
+    public static let appGroupID = "H6AYG25QVN.group.com.ryanstarfox.shop"
+    /// Pre–Team-ID-prefix container; migrated once into `appGroupID`.
+    public static let legacyAppGroupID = "group.com.ryanstarfox.shop"
+    #else
     public static let appGroupID = "group.com.ryanstarfox.shop"
+    #endif
     public static let recentlyCompletedLimit = 20
 
     private static let snapshotFileName = "widget_active_items.json"

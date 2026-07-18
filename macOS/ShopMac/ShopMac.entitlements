@@ -8,11 +8,8 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
+		<string>H6AYG25QVN.group.com.ryanstarfox.shop</string>
 		<string>group.com.ryanstarfox.shop</string>
-	</array>
-	<key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
-	<array>
-		<string>/Library/Application Support/</string>
 	</array>
 </dict>
 </plist>
