@@ -96,14 +96,17 @@ targets:
       - package: ShopCore
 
   # macOS App
+  # productName / PRODUCT_NAME → Finder bundle is "Shop !.app" (scheme/target stay ShopMac)
   ShopMac:
     type: application
     platform: macOS
+    productName: "Shop !"
     sources:
       - path: macOS/ShopMac
         type: group
     settings:
       base:
+        PRODUCT_NAME: "Shop !"
         PRODUCT_BUNDLE_IDENTIFIER: com.ryanstarfox.shop.mac
         INFOPLIST_FILE: macOS/ShopMac/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -121,8 +124,13 @@ targets:
     entitlements:
       path: macOS/ShopMac/ShopMac.entitlements
       properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
         com.apple.security.application-groups:
           - group.com.ryanstarfox.shop
+        # One-time copy of pre-sandbox SwiftData files from unsandboxed Application Support.
+        com.apple.security.temporary-exception.files.home-relative-path.read-only:
+          - /Library/Application Support/
 
   ShopWidget:
     type: app-extension

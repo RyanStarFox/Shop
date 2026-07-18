@@ -49,7 +49,14 @@ public final class ShoppingStore {
         } else if let storeURL {
             configuration = ModelConfiguration(schema: schema, url: storeURL)
         } else {
-            configuration = ModelConfiguration(isStoredInMemoryOnly: false)
+            // App Group entitlement → SwiftData `.automatic` uses the shared container.
+            // Migrate any pre-sandbox store out of unsandboxed Application Support first.
+            LegacySwiftDataStoreMigration.migrateIfNeeded()
+            configuration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                groupContainer: .identifier(LegacySwiftDataStoreMigration.appGroupID)
+            )
         }
         do {
             modelContainer = try ModelContainer(
