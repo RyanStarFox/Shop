@@ -24,26 +24,43 @@ public enum ShopHaptics {
         #elseif os(watchOS)
         WKInterfaceDevice.current().play(.success)
         #elseif os(macOS)
-        NSHapticFeedbackManager.defaultPerformer.perform(
-            .levelChange,
-            performanceTime: .now
-        )
+        performMacPulse()
         #endif
     }
 
     /// Lighter feedback when restoring an item to the active list.
     public static func itemRestored() {
         #if os(iOS)
-        let generator = UIImpactFeedbackGenerator(style: .soft)
+        let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.prepare()
-        generator.impactOccurred(intensity: 0.7)
+        generator.impactOccurred(intensity: 1.0)
         #elseif os(watchOS)
         WKInterfaceDevice.current().play(.click)
         #elseif os(macOS)
-        NSHapticFeedbackManager.defaultPerformer.perform(
-            .generic,
-            performanceTime: .now
-        )
+        performMacPulse()
         #endif
     }
+
+    /// Trackpad click when pull-to-refresh crosses the arm threshold.
+    public static func pullToRefreshArmed() {
+        #if os(macOS)
+        performMacPulse()
+        #endif
+    }
+
+    /// Trackpad feedback when a refresh / sync is committed.
+    public static func pullToRefreshTriggered() {
+        #if os(macOS)
+        performMacPulse()
+        #endif
+    }
+
+    #if os(macOS)
+    private static func performMacPulse() {
+        NSHapticFeedbackManager.defaultPerformer.perform(
+            .levelChange,
+            performanceTime: .now
+        )
+    }
+    #endif
 }

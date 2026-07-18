@@ -176,7 +176,7 @@ struct ContentView: View {
                             } label: {
                                 Image(systemName: "arrow.uturn.backward")
                             }
-                            .disabled(undoCoordinator.currentAction == nil)
+                            .disabled(!undoCoordinator.canUndo)
                             .accessibilityLabel(ShopStrings.undo)
                             .accessibilityValue(undoCoordinator.currentAction?.message ?? "")
 
@@ -247,6 +247,9 @@ struct ContentView: View {
                 .preferredColorScheme(
                     AppearancePreference(storageValue: appearanceMode).colorScheme
                 )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .shopAddFromWidget)) { _ in
+            editorMode = .add
         }
     }
 

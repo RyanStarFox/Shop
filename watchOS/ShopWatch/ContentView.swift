@@ -8,6 +8,8 @@ struct WatchContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showAddSheet = false
+    @State private var editingItemID: UUID?
+    @State private var showEditSheet = false
 
     private var sections: ItemListSections {
         ItemListSections.derive(from: dataStore.filteredItems)
@@ -51,6 +53,10 @@ struct WatchContentView: View {
                 }
             }
             .listStyle(.plain)
+            .refreshable {
+                watchSync.requestLatestSnapshot()
+                watchSync.sendLatestSnapshot()
+            }
             .navigationTitle(ShopStrings.appName)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -67,6 +73,11 @@ struct WatchContentView: View {
             }
             .sheet(isPresented: $showAddSheet) {
                 WatchAddItemView()
+            }
+            .sheet(isPresented: $showEditSheet) {
+                if let editingItemID {
+                    WatchEditItemView(itemID: editingItemID)
+                }
             }
         }
     }
@@ -87,7 +98,7 @@ struct WatchContentView: View {
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(.borderedProminent)
-            .tint(ShopTheme.brandRed)
+            .tint(ShopTheme.brandColor)
             .accessibilityLabel(ShopStrings.addItem)
         }
         .frame(maxWidth: .infinity)
@@ -146,8 +157,15 @@ struct WatchContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                editingItemID = item.id
+                showEditSheet = true
+            }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(itemAccessibilityLabel(for: item))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(ShopStrings.editItem)
         }
         .padding(.vertical, ShopTheme.spacingXS)
         .listRowBackground(
@@ -173,7 +191,7 @@ struct WatchContentView: View {
                     systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
                 )
             }
-            .tint(ShopTheme.brandRed)
+            .tint(ShopTheme.brandColor)
         }
     }
 
@@ -218,14 +236,14 @@ private struct WatchCompletionControl: View {
         ZStack {
             Circle()
                 .stroke(
-                    isCompleted ? ShopTheme.naturalGreen : Color.secondary.opacity(0.35),
+                    isCompleted ? ShopTheme.brandColor : Color.secondary.opacity(0.35),
                     lineWidth: 2
                 )
                 .frame(width: 22, height: 22)
 
             if isCompleted {
                 Circle()
-                    .fill(ShopTheme.naturalGreen)
+                    .fill(ShopTheme.brandColor)
                     .frame(width: 22, height: 22)
                 Image(systemName: "checkmark")
                     .font(.caption2.weight(.bold))

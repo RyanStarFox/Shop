@@ -6,10 +6,34 @@ import UIKit
 import AppKit
 #endif
 
+public enum ShopHexColor {
+    /// Accepts `#RRGGBB`, `RRGGBB`, `#RGB`, or `RGB` and returns uppercase `#RRGGBB`.
+    public static func normalize(_ input: String) -> String? {
+        var value = input.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if value.hasPrefix("#") {
+            value.removeFirst()
+        }
+        guard !value.isEmpty else { return nil }
+
+        if value.count == 3 {
+            value = value.map { String($0) + String($0) }.joined()
+        }
+
+        guard value.count == 6,
+              value.allSatisfy(\.isHexDigit),
+              let rgb = UInt64(value, radix: 16)
+        else { return nil }
+
+        _ = rgb
+        return "#\(value)"
+    }
+}
+
 public extension Color {
     init?(shopHex: String) {
-        let value = shopHex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard value.count == 6, let rgb = UInt64(value, radix: 16) else { return nil }
+        guard let normalized = ShopHexColor.normalize(shopHex) else { return nil }
+        let value = String(normalized.dropFirst())
+        guard let rgb = UInt64(value, radix: 16) else { return nil }
         self.init(
             .sRGB,
             red: Double((rgb >> 16) & 0xFF) / 255,

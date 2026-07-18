@@ -1,6 +1,6 @@
 import Foundation
 
-/// How long to keep completed archives and soft-deleted tombstones before cleanup.
+/// How long to keep completed archives (from `completedAt`) and soft-deleted tombstones before cleanup.
 public enum DataRetentionPolicy: String, CaseIterable, Sendable {
     case oneWeek
     case oneMonth

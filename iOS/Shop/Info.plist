@@ -44,5 +44,24 @@
 	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Automatic</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.ryanstarfox.shop</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>shop</string>
+			</array>
+		</dict>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.ryanstarfox.shop.refresh</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

@@ -30,7 +30,7 @@ struct FilterView: View {
                                 Spacer()
                                 if localFilter == option {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(ShopTheme.naturalGreen)
+                                        .foregroundStyle(ShopTheme.brandColor)
                                 }
                             }
                             .frame(minHeight: ShopTheme.minTouchTarget)
@@ -56,7 +56,7 @@ struct FilterView: View {
                                     Spacer()
                                     if localTags.contains(tag.id) {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(ShopTheme.naturalGreen)
+                                            .foregroundStyle(ShopTheme.brandColor)
                                     }
                                 }
                                 .frame(minHeight: ShopTheme.minTouchTarget)
@@ -70,7 +70,7 @@ struct FilterView: View {
 
                 Section {
                     Toggle(ShopStrings.filterCustomDateRange, isOn: $showDatePicker)
-                        .tint(ShopTheme.naturalGreen)
+                        .tint(ShopTheme.brandColor)
 
                     if showDatePicker {
                         DatePicker(
@@ -116,7 +116,7 @@ struct FilterView: View {
                 }
             }
         }
-        .tint(ShopTheme.naturalGreen)
+        .tint(ShopTheme.brandColor)
     }
 
     private func filterLabel(for option: DataStore.FilterOption) -> String {

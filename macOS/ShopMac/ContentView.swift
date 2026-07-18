@@ -18,6 +18,20 @@ struct MacContentView: View {
     @State private var draftSelectedTags: Set<UUID> = []
     @State private var draftCreatedAt = Date()
     @State private var isDetailTextFocused = false
+    @State private var isDetailEditing = false
+    @State private var detailSaveRequest = 0
+    @State private var detailFocusNameRequest = 0
+    @State private var detailRestoreFocusRequest = 0
+    @State private var detailReleaseFocusRequest = 0
+    @State private var lastDetailEditorFocus: MacEditorFocus?
+    @State private var showSidebarNewTagSheet = false
+    @State private var sidebarNewTagName = ""
+    @State private var sidebarNewTagColor = "#007AFF"
+    @State private var tagEditTarget: Tag?
+    @State private var sidebarEditTagName = ""
+    @State private var sidebarEditTagColor = "#007AFF"
+    @State private var tagDeleteTarget: Tag?
+    @FocusState private var isListKeyboardFocused: Bool
     @State private var syncSpin = 0.0
     @State private var completionHapticToken = 0
     @State private var restoreHapticToken = 0
@@ -25,6 +39,13 @@ struct MacContentView: View {
     @FocusState private var isSearchFocused: Bool
 
     private var isMultiSelecting: Bool { selectedItemIDs.count > 1 }
+
+    private var isListNavigationMonitorEnabled: Bool {
+        !isSearchFocused
+            && !isDrafting
+            && !isDetailEditing
+            && !isDetailTextFocused
+    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -73,11 +94,66 @@ struct MacContentView: View {
         .onChange(of: filteredItems.map(\.id)) { _, _ in
             pruneSelection()
         }
-        .onKeyPress(.space) {
-            handleCompletionKeyPress()
+        .onExitCommand(perform: handleDetailEscape)
+        .alert(ShopStrings.deleteItem, isPresented: Binding(
+            get: { tagDeleteTarget != nil },
+            set: { if !$0 { tagDeleteTarget = nil } }
+        )) {
+            Button(ShopStrings.deleteItem, role: .destructive) {
+                if let tag = tagDeleteTarget {
+                    dataStore.deleteTag(tag, presentUndo: undoCoordinator.present)
+                }
+                tagDeleteTarget = nil
+            }
+            Button(ShopStrings.dismiss, role: .cancel) {
+                tagDeleteTarget = nil
+            }
+        } message: {
+            if let tag = tagDeleteTarget {
+                Text(String(format: String(localized: "mac.tag_delete_confirm"), tag.name))
+            }
         }
-        .onKeyPress(.return) {
-            handleCompletionKeyPress()
+        .sheet(isPresented: $showSidebarNewTagSheet) {
+            MacSidebarNewTagSheet(
+                name: $sidebarNewTagName,
+                colorHex: $sidebarNewTagColor,
+                onAdd: commitSidebarNewTag,
+                onCancel: {
+                    showSidebarNewTagSheet = false
+                    sidebarNewTagName = ""
+                }
+            )
+        }
+        .sheet(item: $tagEditTarget) { tag in
+            MacSidebarRenameTagSheet(
+                name: $sidebarEditTagName,
+                colorHex: $sidebarEditTagColor,
+                tag: tag,
+                onSave: { commitSidebarTagEdit(tag) },
+                onCancel: {
+                    tagEditTarget = nil
+                    sidebarEditTagName = ""
+                }
+            )
+        }
+        .background {
+            Group {
+                if isDrafting || isDetailEditing {
+                    Button("") { handleDetailSaveShortcut() }
+                        .keyboardShortcut("s", modifiers: .command)
+                    Button("") { handleDetailSaveShortcut() }
+                        .keyboardShortcut(.return, modifiers: .command)
+                }
+            }
+            .hidden()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .shopAddFromWidget)) { _ in
+            beginDraft()
+        }
+        .onAppear {
+            DispatchQueue.main.async {
+                restoreListKeyboardFocus()
+            }
         }
     }
 
@@ -85,7 +161,7 @@ struct MacContentView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            List(selection: $dataStore.selectedFilter) {
+            List {
                 Section {
                     Button(action: beginDraft) {
                         Label(ShopStrings.addItem, systemImage: "plus.circle")
@@ -99,28 +175,15 @@ struct MacContentView: View {
 
                 Section(ShopStrings.filter) {
                     ForEach(DataStore.FilterOption.allCases, id: \.self) { option in
-                        Label(filterLabel(for: option), systemImage: iconForFilter(option))
-                            .tag(option)
-                    }
-                }
-
-                if !dataStore.tags.isEmpty {
-                    Section(ShopStrings.tags) {
                         Button {
-                            selectAllTagsFilter()
+                            dataStore.selectedFilter = option
+                            focusItemList()
                         } label: {
                             HStack(spacing: ShopTheme.spacingSM) {
-                                Circle()
-                                    .fill(Color.black)
-                                    .frame(width: 10, height: 10)
-                                    .overlay {
-                                        Circle()
-                                            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 0.5)
-                                    }
-                                Text(ShopStrings.allTags)
+                                Label(filterLabel(for: option), systemImage: iconForFilter(option))
                                     .foregroundStyle(.primary)
                                 Spacer(minLength: 0)
-                                if dataStore.selectedTags.isEmpty {
+                                if dataStore.selectedFilter == option {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(ShopTheme.brandColor)
                                 }
@@ -130,37 +193,45 @@ struct MacContentView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(
-                            dataStore.selectedTags.isEmpty ? .isSelected : []
+                            dataStore.selectedFilter == option ? .isSelected : []
                         )
-                        .accessibilityLabel(ShopStrings.allTags)
-
-                        ForEach(dataStore.tags) { tag in
-                            Button {
-                                toggleTagFilter(tag.id)
-                            } label: {
-                                HStack(spacing: ShopTheme.spacingSM) {
-                                    Circle()
-                                        .fill(tag.displayColor)
-                                        .frame(width: 10, height: 10)
-                                    Text(tag.name)
-                                        .foregroundStyle(.primary)
-                                    Spacer(minLength: 0)
-                                    if dataStore.selectedTags.contains(tag.id) {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(ShopTheme.brandColor)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(
-                                dataStore.selectedTags.contains(tag.id) ? .isSelected : []
-                            )
-                            .accessibilityLabel(tag.name)
-                        }
                     }
                 }
+
+                Section(ShopStrings.tags) {
+                    VStack(spacing: 0) {
+                        allTagsFilterRow
+
+                        ForEach(dataStore.tags) { tag in
+                            sidebarTagRow(tag)
+                                .background {
+                                    MacSidebarTagContextMenuInstaller(
+                                        tag: tag,
+                                        onRename: {
+                                            tagEditTarget = tag
+                                            sidebarEditTagName = tag.name
+                                            sidebarEditTagColor = tag.colorHex
+                                        },
+                                        onDelete: {
+                                            tagDeleteTarget = tag
+                                        },
+                                        onColorChange: { hex in
+                                            dataStore.updateTag(tag, colorHex: hex)
+                                        }
+                                    )
+                                }
+                        }
+
+                        sidebarAddTagRow
+
+                        if !dataStore.selectedTags.isEmpty {
+                            sidebarTagMatchModeRow
+                                .padding(.top, 4)
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                }
+                .id("sidebar-tags-\(dataStore.selectedTags.count)-\(dataStore.tagMatchMode.rawValue)")
             }
             .listStyle(.sidebar)
 
@@ -200,13 +271,48 @@ struct MacContentView: View {
                     onSelectDraft: selectDraftRow,
                     onToggleCompletion: toggleCompletion,
                     onDeleteItem: deleteItem,
+                    onFocusList: focusItemList,
                     onRefresh: {
                         await performManualSync()
                     }
                 )
+                .focusEffectDisabled()
             }
         }
         .navigationTitle(listTitle)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            focusItemList()
+        }
+        .focusable()
+        .focused($isListKeyboardFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.space) {
+            handleSpaceKeyPress()
+        }
+        .onKeyPress(.return) {
+            handleReturnKeyPress()
+        }
+        .onKeyPress(keys: [.upArrow, .downArrow, .tab]) { press in
+            if press.key == .tab {
+                return handleListNavigateKeyPress(isForward: !press.modifiers.contains(.shift))
+            }
+            if press.modifiers.contains(.command) {
+                return handleCommandArrowKeyPress(isUp: press.key == .upArrow)
+            }
+            return handleArrowKeyPress(isUp: press.key == .upArrow)
+        }
+        .background {
+            MacListNavigationMonitor(
+                isEnabled: isListNavigationMonitorEnabled,
+                onNavigate: { forward in
+                    _ = handleListNavigateKeyPress(isForward: forward)
+                },
+                onCommandSave: handleDetailSaveShortcut,
+                consumesCommandSaveWhenIdle: !isDrafting && !isDetailEditing
+            )
+            .frame(width: 0, height: 0)
+        }
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -214,7 +320,7 @@ struct MacContentView: View {
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
                 }
-                .disabled(undoCoordinator.currentAction == nil)
+                .disabled(!undoCoordinator.canUndo)
                 .help(ShopStrings.undo)
                 .accessibilityLabel(ShopStrings.undo)
                 .accessibilityValue(undoCoordinator.currentAction?.message ?? "")
@@ -261,6 +367,14 @@ struct MacContentView: View {
             TextField(ShopStrings.itemSearch, text: $searchText)
                 .textFieldStyle(.plain)
                 .focused($isSearchFocused)
+                .onKeyPress(.downArrow) {
+                    handleSearchNavigateDown()
+                    return .handled
+                }
+                .onKeyPress(.return) {
+                    handleSearchNavigateDown()
+                    return .handled
+                }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -311,7 +425,8 @@ struct MacContentView: View {
                 draftCreatedAt: $draftCreatedAt,
                 isTextFocused: $isDetailTextFocused,
                 onSave: commitDraft,
-                onDiscard: discardDraft
+                onDiscard: discardDraft,
+                onEscape: handleDetailEscape
             )
         } else if selectedItemIDs.count > 1 {
             MacBatchDetailView(
@@ -339,7 +454,14 @@ struct MacContentView: View {
         } else if let selectedItemID = selectedItemIDs.first, item(for: selectedItemID) != nil {
             MacItemDetailView(
                 itemID: selectedItemID,
-                isTextFocused: $isDetailTextFocused
+                isEditing: $isDetailEditing,
+                isTextFocused: $isDetailTextFocused,
+                saveRequest: detailSaveRequest,
+                focusNameRequest: detailFocusNameRequest,
+                restoreFocusRequest: detailRestoreFocusRequest,
+                releaseFocusRequest: detailReleaseFocusRequest,
+                lastEditorFocus: $lastDetailEditorFocus,
+                onEscape: handleDetailEscape
             )
             .id(selectedItemID)
         } else {
@@ -457,6 +579,7 @@ struct MacContentView: View {
 
     private func beginDraft() {
         isDrafting = true
+        isDetailEditing = false
         draftName = ""
         draftSelectedTags = []
         draftCreatedAt = Date()
@@ -467,6 +590,7 @@ struct MacContentView: View {
 
     private func discardDraft() {
         isDrafting = false
+        isDetailEditing = false
         draftName = ""
         draftSelectedTags = []
         draftCreatedAt = Date()
@@ -499,6 +623,7 @@ struct MacContentView: View {
         if isDrafting {
             discardDraft()
         }
+        focusItemList()
         let modifiers = currentClickModifiers()
         let ordered = ItemSelection.visualOrderedIDs(
             from: ItemListSections.derive(
@@ -545,8 +670,8 @@ struct MacContentView: View {
         }
     }
 
-    private func handleCompletionKeyPress() -> KeyPress.Result {
-        guard !isDetailTextFocused, !isSearchFocused, !isDrafting else {
+    private func handleSpaceKeyPress() -> KeyPress.Result {
+        guard !isSearchFocused, !isDrafting, !isDetailEditing, !isDetailTextFocused else {
             return .ignored
         }
         guard selectedItemIDs.count == 1,
@@ -556,6 +681,112 @@ struct MacContentView: View {
         }
         toggleCompletion(item)
         return .handled
+    }
+
+    private func handleReturnKeyPress() -> KeyPress.Result {
+        guard !isSearchFocused, !isDrafting else { return .ignored }
+        if isDetailEditing || isDetailTextFocused {
+            return .ignored
+        }
+        guard selectedItemIDs.count == 1, item(for: selectedItemIDs.first!) != nil else {
+            return .ignored
+        }
+        enterDetailEditing()
+        return .handled
+    }
+
+    private func handleArrowKeyPress(isUp: Bool) -> KeyPress.Result {
+        handleListNavigateKeyPress(isForward: !isUp)
+    }
+
+    private func handleListNavigateKeyPress(isForward: Bool) -> KeyPress.Result {
+        guard !isDrafting, !isDetailEditing, !isDetailTextFocused else {
+            return .ignored
+        }
+        if isSearchFocused {
+            isSearchFocused = false
+        }
+        let ordered = visualOrderedItemIDs()
+        guard !ordered.isEmpty else { return .ignored }
+
+        if selectedItemIDs.isEmpty {
+            selectSingleItem(isForward ? ordered[0] : ordered[ordered.count - 1])
+            return .handled
+        }
+
+        guard selectedItemIDs.count == 1,
+              let currentID = selectedItemIDs.first,
+              let index = ordered.firstIndex(of: currentID) else {
+            return .ignored
+        }
+
+        let nextIndex: Int
+        if isForward {
+            nextIndex = index == ordered.count - 1 ? 0 : index + 1
+        } else {
+            nextIndex = index == 0 ? ordered.count - 1 : index - 1
+        }
+        selectSingleItem(ordered[nextIndex])
+        return .handled
+    }
+
+    private func handleSearchNavigateDown() {
+        let ordered = visualOrderedItemIDs()
+        guard !ordered.isEmpty else { return }
+        isSearchFocused = false
+        selectSingleItem(ordered[0])
+    }
+
+    private func handleCommandArrowKeyPress(isUp: Bool) -> KeyPress.Result {
+        guard !isSearchFocused, !isDrafting, !isDetailEditing, !isDetailTextFocused else {
+            return .ignored
+        }
+        let ordered = visualOrderedItemIDs()
+        guard !ordered.isEmpty else { return .ignored }
+        selectSingleItem(isUp ? ordered[0] : ordered[ordered.count - 1])
+        return .handled
+    }
+
+    private func visualOrderedItemIDs() -> [UUID] {
+        ItemSelection.visualOrderedIDs(
+            from: ItemListSections.derive(
+                from: filteredItems,
+                groupOption: dataStore.groupOption
+            )
+        )
+    }
+
+    private func selectSingleItem(_ id: UUID) {
+        if selectedItemIDs != [id] {
+            lastDetailEditorFocus = nil
+        }
+        selectedItemIDs = [id]
+        selectionAnchorID = id
+        isDetailEditing = false
+        restoreListKeyboardFocus()
+    }
+
+    private func focusItemList() {
+        isDetailEditing = false
+        isDetailTextFocused = false
+        isSearchFocused = false
+        detailReleaseFocusRequest &+= 1
+        MacKeyboardFocusHelper.resignKeyFocus()
+        if selectedItemIDs.count == 1, let selectedID = selectedItemIDs.first {
+            selectionAnchorID = selectedID
+        }
+        restoreListKeyboardFocus()
+    }
+
+    private func enterDetailEditing() {
+        guard selectedItemIDs.count == 1 else { return }
+        isListKeyboardFocused = false
+        isDetailEditing = true
+        if lastDetailEditorFocus != nil {
+            detailRestoreFocusRequest &+= 1
+        } else {
+            detailFocusNameRequest &+= 1
+        }
     }
 
     private func selectAllTagsFilter() {
@@ -570,19 +801,202 @@ struct MacContentView: View {
         }
     }
 
+    private var allTagsFilterRow: some View {
+        Button {
+            selectAllTagsFilter()
+            focusItemList()
+        } label: {
+            HStack(spacing: ShopTheme.spacingSM) {
+                Circle()
+                    .fill(Color.black)
+                    .frame(width: 10, height: 10)
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 0.5)
+                    }
+                Text(ShopStrings.allTags)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+                if dataStore.selectedTags.isEmpty {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(ShopTheme.brandColor)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(dataStore.selectedTags.isEmpty ? .isSelected : [])
+        .accessibilityLabel(ShopStrings.allTags)
+    }
+
+    private func sidebarTagRow(_ tag: Tag) -> some View {
+        Button {
+            toggleTagFilter(tag.id)
+            focusItemList()
+        } label: {
+            HStack(spacing: ShopTheme.spacingSM) {
+                Circle()
+                    .fill(tag.displayColor)
+                    .frame(width: 10, height: 10)
+                Text(tag.name)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+                if dataStore.selectedTags.contains(tag.id) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(ShopTheme.brandColor)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(dataStore.selectedTags.contains(tag.id) ? .isSelected : [])
+        .accessibilityLabel(tag.name)
+    }
+
+    private var sidebarAddTagRow: some View {
+        Button(action: presentSidebarNewTagSheet) {
+            HStack(spacing: ShopTheme.spacingSM) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 10, height: 10)
+                Text(String(localized: "mac.tag_new"))
+            }
+            .foregroundStyle(ShopTheme.brandColor)
+            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sidebarTagMatchModeRow: some View {
+        HStack(spacing: 0) {
+            tagMatchModeButton(
+                title: ShopStrings.widgetMatchAny,
+                mode: .any
+            )
+            Rectangle()
+                .fill(Color.secondary.opacity(0.25))
+                .frame(width: 1)
+            tagMatchModeButton(
+                title: ShopStrings.widgetMatchAll,
+                mode: .all
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 28)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+        }
+    }
+
+    private func tagMatchModeButton(title: String, mode: WidgetTagMatchMode) -> some View {
+        let selected = dataStore.tagMatchMode == mode
+        return Button {
+            dataStore.tagMatchMode = mode
+            focusItemList()
+        } label: {
+            Text(title)
+                .font(.body)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, 4)
+                .background(selected ? ShopTheme.brandColor.opacity(0.2) : Color.clear)
+                .foregroundStyle(selected ? ShopTheme.brandColor : .primary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func presentSidebarNewTagSheet() {
+        sidebarNewTagName = ""
+        sidebarNewTagColor = "#007AFF"
+        showSidebarNewTagSheet = true
+    }
+
+    private func commitSidebarNewTag() {
+        let name = sidebarNewTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        dataStore.addTag(name: name, colorHex: sidebarNewTagColor)
+        showSidebarNewTagSheet = false
+        sidebarNewTagName = ""
+        sidebarNewTagColor = "#007AFF"
+    }
+
+    private func commitSidebarTagEdit(_ tag: Tag) {
+        let name = sidebarEditTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        dataStore.updateTag(tag, name: name, colorHex: sidebarEditTagColor)
+        tagEditTarget = nil
+        sidebarEditTagName = ""
+    }
+
+    private func handleDetailEscape() {
+        if isDrafting {
+            let name = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if name.isEmpty {
+                discardDraft()
+            } else {
+                commitDraft()
+            }
+            restoreListKeyboardFocus()
+        } else if isDetailEditing {
+            isDetailEditing = false
+            isDetailTextFocused = false
+            detailReleaseFocusRequest &+= 1
+            restoreListKeyboardFocus()
+        } else if !selectedItemIDs.isEmpty {
+            selectedItemIDs = []
+            selectionAnchorID = nil
+            lastDetailEditorFocus = nil
+            restoreListKeyboardFocus()
+        }
+    }
+
+    private func restoreListKeyboardFocus() {
+        isDetailTextFocused = false
+        MacKeyboardFocusHelper.resignKeyFocus()
+        isListKeyboardFocused = false
+        DispatchQueue.main.async {
+            isListKeyboardFocused = true
+        }
+    }
+
+    private func handleDetailSaveShortcut() {
+        if isDrafting {
+            commitDraft()
+            return
+        }
+        guard isDetailEditing, selectedItemIDs.count == 1 else { return }
+        detailSaveRequest &+= 1
+    }
+
     private func toggleCompletion(_ item: ShoppingItem) {
         let willComplete = !item.isCompleted
-        dataStore.setCompleted(
-            item,
-            completed: willComplete,
-            presentUndo: undoCoordinator.present
-        )
+        MacFocusDiag.log("toggleCompletion \(item.id) willComplete=\(willComplete) beforeActive=\(filteredItems.filter { !$0.isCompleted }.count) beforeArchived=\(filteredItems.filter(\.isCompleted).count)")
         if willComplete {
             completionHapticToken &+= 1
             ShopHaptics.itemCompleted()
         } else {
             restoreHapticToken &+= 1
             ShopHaptics.itemRestored()
+        }
+        DispatchQueue.main.async {
+            var transaction = Transaction()
+            transaction.animation = nil
+            withTransaction(transaction) {
+                dataStore.setCompleted(
+                    item,
+                    completed: willComplete,
+                    presentUndo: undoCoordinator.present
+                )
+            }
+            MacFocusDiag.log("toggleCompletion done afterActive=\(filteredItems.filter { !$0.isCompleted }.count) afterArchived=\(filteredItems.filter(\.isCompleted).count)")
         }
     }
 
@@ -653,6 +1067,36 @@ struct MacContentView: View {
 
 // MARK: - Item List
 
+private struct MacArchiveHeaderRow: View {
+    var body: some View {
+        Text(ShopStrings.archiveSection)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, ShopTheme.spacingSM)
+            .accessibilityAddTraits(.isHeader)
+            .listRowSeparator(.hidden)
+    }
+}
+
+private struct MacDraftRow: View {
+    var body: some View {
+        HStack(spacing: ShopTheme.spacingSM + 4) {
+            Circle()
+                .stroke(Color.secondary.opacity(0.35), lineWidth: 2)
+                .frame(width: 20, height: 20)
+
+            Text(String(localized: "mac.draft_placeholder"))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, ShopTheme.spacingXS)
+    }
+}
+
 private struct MacItemListView: View {
     let filteredItems: [ShoppingItem]
     let searchIsActive: Bool
@@ -662,10 +1106,10 @@ private struct MacItemListView: View {
     let onSelectDraft: () -> Void
     let onToggleCompletion: (ShoppingItem) -> Void
     let onDeleteItem: (ShoppingItem) -> Void
+    let onFocusList: () -> Void
     let onRefresh: () async -> Void
 
     @EnvironmentObject private var dataStore: DataStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var sections: ItemListSections {
         ItemListSections.derive(
@@ -687,6 +1131,14 @@ private struct MacItemListView: View {
 
     private var itemLookup: [UUID: ShoppingItem] {
         Dictionary(uniqueKeysWithValues: filteredItems.map { ($0.id, $0) })
+    }
+
+    /// Forces List to rebuild when active/archived membership changes.
+    private var listStructureID: String {
+        let active = sections.activeIDs.map(\.uuidString).joined(separator: ",")
+        let archived = sections.archivedIDs.map(\.uuidString).joined(separator: ",")
+        let groups = sections.activeGroups.map(\.id).joined(separator: ",")
+        return "\(sections.isGrouped)|\(groups)|\(active)|\(archived)"
     }
 
     var body: some View {
@@ -715,33 +1167,49 @@ private struct MacItemListView: View {
                             .textCase(nil)
                     }
                 }
-            } else if !sections.activeIDs.isEmpty {
-                Section {
-                    activeRows
-                }
-            }
-
-            if sections.showsArchiveSection {
-                Section {
-                    ForEach(sections.archivedIDs, id: \.self) { itemID in
-                        if let item = itemLookup[itemID] {
-                            row(for: item)
+                if sections.showsArchiveSection {
+                    Section {
+                        MacArchiveHeaderRow()
+                        ForEach(sections.archivedIDs, id: \.self) { itemID in
+                            if let item = itemLookup[itemID] {
+                                row(for: item)
+                            }
                         }
                     }
-                } header: {
-                    Text(ShopStrings.archiveSection)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(nil)
+                }
+            } else if !sections.activeIDs.isEmpty || sections.showsArchiveSection {
+                Section {
+                    if !sections.activeIDs.isEmpty {
+                        activeRows
+                    }
+                    if sections.showsArchiveSection {
+                        MacArchiveHeaderRow()
+                        ForEach(sections.archivedIDs, id: \.self) { itemID in
+                            if let item = itemLookup[itemID] {
+                                row(for: item)
+                            }
+                        }
+                    }
                 }
             }
         }
+        .id(listStructureID)
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+        .overlay {
+            MacListFocusBridge(onFocus: onFocusList)
+        }
         .macPullToRefresh {
             await onRefresh()
         }
-        .animation(reduceMotion ? nil : .default, value: sections.displayRows)
+    }
+
+    private struct RowIdentity: Hashable {
+        let itemID: UUID
+        let isCompleted: Bool
     }
 
     @ViewBuilder
@@ -765,6 +1233,7 @@ private struct MacItemListView: View {
             onToggleCompletion: { onToggleCompletion(item) },
             onSelect: { onSelect(item) }
         )
+        .id(RowIdentity(itemID: item.id, isCompleted: item.isCompleted))
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 onDeleteItem(item)
@@ -799,28 +1268,14 @@ private struct MacItemListView: View {
 
 // MARK: - Item Row
 
-private struct MacDraftRow: View {
-    var body: some View {
-        HStack(spacing: ShopTheme.spacingSM + 4) {
-            Circle()
-                .stroke(Color.secondary.opacity(0.35), lineWidth: 2)
-                .frame(width: 20, height: 20)
-
-            Text(String(localized: "mac.draft_placeholder"))
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, ShopTheme.spacingXS)
-    }
-}
-
 private struct MacItemRow: View {
     let item: ShoppingItem
     let isSelected: Bool
     let onToggleCompletion: () -> Void
     let onSelect: () -> Void
+
+    /// Matches a single caption tag line; grows only when tags need more vertical space.
+    private static let tagRowMinHeight: CGFloat = 16
 
     var body: some View {
         HStack(spacing: ShopTheme.spacingSM + 4) {
@@ -838,9 +1293,14 @@ private struct MacItemRow: View {
                         .strikethrough(item.isCompleted, color: .secondary)
                         .lineLimit(2)
 
-                    if !item.tags.isEmpty {
-                        MacTagRow(tags: item.tags)
+                    Group {
+                        if item.tags.isEmpty {
+                            Color.clear
+                        } else {
+                            MacTagRow(tags: item.tags)
+                        }
                     }
+                    .frame(minHeight: Self.tagRowMinHeight, alignment: .topLeading)
                 }
 
                 Spacer(minLength: 0)
@@ -855,6 +1315,7 @@ private struct MacItemRow: View {
             .onTapGesture(perform: onSelect)
         }
         .padding(.vertical, ShopTheme.spacingXS)
+        .focusEffectDisabled()
         .listRowBackground(
             isSelected
                 ? ShopTheme.brandColor.opacity(0.12)
@@ -891,9 +1352,9 @@ private struct MacTagRow: View {
     let tags: [Tag]
 
     var body: some View {
-        HStack(spacing: ShopTheme.spacingSM) {
+        HStack(alignment: .center, spacing: ShopTheme.spacingSM) {
             ForEach(tags, id: \.id) { tag in
-                HStack(spacing: ShopTheme.spacingXS) {
+                HStack(alignment: .center, spacing: ShopTheme.spacingXS) {
                     Circle()
                         .fill(tag.displayColor)
                         .frame(width: 6, height: 6)
@@ -902,6 +1363,7 @@ private struct MacTagRow: View {
                         .foregroundStyle(tag.displayColor)
                         .lineLimit(1)
                 }
+                .frame(height: 16)
             }
         }
     }
@@ -1011,41 +1473,41 @@ private struct MacDraftDetailView: View {
     @Binding var isTextFocused: Bool
     let onSave: () -> Void
     let onDiscard: () -> Void
+    let onEscape: () -> Void
 
     @EnvironmentObject private var dataStore: DataStore
-    @FocusState private var isNameFocused: Bool
+    @State private var editorField: MacEditorFocus?
 
     var body: some View {
         Form {
             Section {
-                TextField(ShopStrings.itemName, text: $draftName)
-                    .focused($isNameFocused)
-                    .onSubmit(onSave)
-            }
-
-            if !dataStore.tags.isEmpty {
-                Section(ShopStrings.tags) {
-                    ForEach(dataStore.tags) { tag in
-                        Toggle(isOn: tagBinding(tag.id)) {
-                            HStack(spacing: ShopTheme.spacingSM) {
-                                Circle()
-                                    .fill(tag.displayColor)
-                                    .frame(width: 10, height: 10)
-                                Text(tag.name)
-                            }
-                        }
-                        .toggleStyle(.checkbox)
-                    }
-                }
-            }
-
-            Section {
-                DatePicker(
-                    ShopStrings.addedAt,
-                    selection: $draftCreatedAt,
-                    displayedComponents: [.date, .hourAndMinute]
+                MacFocusableTextField(
+                    placeholder: ShopStrings.itemName,
+                    text: $draftName,
+                    isActive: editorField == .name,
+                    onTab: focusNext,
+                    onBacktab: focusPrevious,
+                    onMoveUp: focusPrevious,
+                    onMoveDown: focusNext,
+                    onSubmit: onSave,
+                    onBecomeActive: { setEditorField(.name) }
                 )
             }
+
+            MacTagPickerSection(
+                selectedTagIDs: $draftSelectedTags,
+                editorField: $editorField,
+                createdAt: $draftCreatedAt,
+                completedAt: .constant(Date()),
+                onNavigate: { forward in
+                    if forward { focusNext() } else { focusPrevious() }
+                },
+                onSelectTag: { setEditorField(.tag($0)) },
+                onSelectNewTagField: { setEditorField(.newTagName) },
+                onSelectCreatedAt: { setEditorField(.createdAt($0)) },
+                onSelectCompletedAt: { setEditorField(.completedAt($0)) },
+                onEscape: onEscape
+            )
 
             Section {
                 Button(ShopStrings.saveItem, action: onSave)
@@ -1055,28 +1517,76 @@ private struct MacDraftDetailView: View {
         }
         .formStyle(.grouped)
         .navigationTitle(ShopStrings.addItem)
-        .onAppear {
-            isNameFocused = true
-            isTextFocused = true
+        .background {
+            MacEditorNavigationMonitor(
+                isEnabled: true,
+                editorField: editorField,
+                onNavigate: { forward in
+                    if forward { focusNext() } else { focusPrevious() }
+                },
+                onSpace: handleEditorSpace,
+                onEscape: onEscape
+            )
+            .frame(width: 0, height: 0)
         }
-        .onChange(of: isNameFocused) { _, focused in
-            isTextFocused = focused
+        .onAppear {
+            setEditorField(.name)
+        }
+        .onChange(of: editorField) { _, newValue in
+            isTextFocused = newValue != nil
+        }
+        .onKeyPress(.return) {
+            if !draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                onSave()
+                return .handled
+            }
+            return .ignored
         }
     }
 
-    private func tagBinding(_ id: UUID) -> Binding<Bool> {
-        Binding(
-            get: { draftSelectedTags.contains(id) },
-            set: { isOn in
-                var next = draftSelectedTags
-                if isOn {
-                    next.insert(id)
-                } else {
-                    next.remove(id)
-                }
-                draftSelectedTags = next
-            }
-        )
+    private func focusNext() {
+        advanceFocus(by: 1)
+    }
+
+    private func focusPrevious() {
+        advanceFocus(by: -1)
+    }
+
+    private func advanceFocus(by step: Int) {
+        let order = buildFieldOrder()
+        guard !order.isEmpty else { return }
+        guard let current = editorField, let index = order.firstIndex(of: current) else {
+            MacFocusDiag.log("Draft.advanceFocus current=nil -> \(String(describing: order.first)) count=\(order.count)")
+            if let first = order.first { setEditorField(first) }
+            return
+        }
+        let nextIndex = (index + step + order.count) % order.count
+        MacFocusDiag.log("Draft.advanceFocus \(String(describing: current)) -> \(String(describing: order[nextIndex])) step=\(step)")
+        setEditorField(order[nextIndex])
+    }
+
+    private func setEditorField(_ field: MacEditorFocus) {
+        editorField = field
+        if !field.usesTextInput {
+            MacKeyboardFocusHelper.resignKeyFocus()
+        }
+    }
+
+    private func handleEditorSpace() {
+        guard case .tag(let id) = editorField else { return }
+        if draftSelectedTags.contains(id) {
+            draftSelectedTags.remove(id)
+        } else {
+            draftSelectedTags.insert(id)
+        }
+    }
+
+    private func buildFieldOrder() -> [MacEditorFocus] {
+        var order: [MacEditorFocus] = [.name]
+        order.append(contentsOf: dataStore.tags.map { .tag($0.id) })
+        order.append(.newTagName)
+        order.append(contentsOf: MacDateSegment.systemOrdered.map { .createdAt($0) })
+        return order
     }
 }
 
@@ -1084,15 +1594,23 @@ private struct MacDraftDetailView: View {
 
 private struct MacItemDetailView: View {
     let itemID: UUID
+    @Binding var isEditing: Bool
     @Binding var isTextFocused: Bool
+    let saveRequest: Int
+    let focusNameRequest: Int
+    let restoreFocusRequest: Int
+    let releaseFocusRequest: Int
+    @Binding var lastEditorFocus: MacEditorFocus?
+    let onEscape: () -> Void
 
     @EnvironmentObject private var dataStore: DataStore
+    @EnvironmentObject private var undoCoordinator: UndoCoordinator
 
     @State private var itemName = ""
     @State private var selectedTags: Set<UUID> = []
     @State private var createdAt = Date()
     @State private var completedAt = Date()
-    @FocusState private var isNameFocused: Bool
+    @State private var editorField: MacEditorFocus?
 
     private var item: ShoppingItem? {
         dataStore.items.first { $0.id == itemID }
@@ -1101,63 +1619,10 @@ private struct MacItemDetailView: View {
     var body: some View {
         Group {
             if let item {
-                Form {
-                    Section {
-                        TextField(ShopStrings.itemName, text: $itemName)
-                            .focused($isNameFocused)
-                            .onSubmit { save(item) }
-                    }
-
-                    if !dataStore.tags.isEmpty {
-                        Section(ShopStrings.tags) {
-                            ForEach(dataStore.tags) { tag in
-                                Toggle(isOn: tagBinding(tag.id)) {
-                                    HStack(spacing: ShopTheme.spacingSM) {
-                                        Circle()
-                                            .fill(tag.displayColor)
-                                            .frame(width: 10, height: 10)
-                                        Text(tag.name)
-                                    }
-                                }
-                                .toggleStyle(.checkbox)
-                            }
-                        }
-                    }
-
-                    Section {
-                        DatePicker(
-                            ShopStrings.addedAt,
-                            selection: $createdAt,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                        if item.isCompleted {
-                            DatePicker(
-                                ShopStrings.completedAtLabel,
-                                selection: $completedAt,
-                                displayedComponents: [.date, .hourAndMinute]
-                            )
-                        }
-                    }
-                }
-                .formStyle(.grouped)
-                .onAppear { syncFromItem(item) }
-                .onChange(of: item.updatedAt) { _, _ in
-                    syncFromItemIfNeeded(item)
-                }
-                .onChange(of: itemName) { _, _ in
-                    save(item)
-                }
-                .onChange(of: selectedTags) { _, _ in
-                    save(item)
-                }
-                .onChange(of: createdAt) { _, _ in
-                    save(item)
-                }
-                .onChange(of: completedAt) { _, _ in
-                    save(item)
-                }
-                .onChange(of: isNameFocused) { _, focused in
-                    isTextFocused = focused
+                if isEditing {
+                    editingForm(for: item)
+                } else {
+                    previewForm(for: item)
                 }
             } else {
                 ContentUnavailableView(
@@ -1168,21 +1633,204 @@ private struct MacItemDetailView: View {
             }
         }
         .navigationTitle(ShopStrings.editItem)
+        .onChange(of: isEditing) { _, editing in
+            if editing {
+                if let item {
+                    syncFromItem(item)
+                }
+            } else {
+                if let editorField {
+                    lastEditorFocus = editorField
+                }
+                self.editorField = nil
+                isTextFocused = false
+                if let item {
+                    syncFromItem(item)
+                }
+            }
+        }
+        .onChange(of: focusNameRequest) { _, _ in
+            guard isEditing else { return }
+            setEditorField(.name)
+        }
+        .onChange(of: restoreFocusRequest) { _, _ in
+            guard isEditing else { return }
+            setEditorField(lastEditorFocus ?? .name)
+        }
+        .onChange(of: releaseFocusRequest) { _, _ in
+            editorField = nil
+            isTextFocused = false
+            MacKeyboardFocusHelper.resignKeyFocus()
+        }
+        .onChange(of: editorField) { _, newValue in
+            if let newValue, isEditing {
+                lastEditorFocus = newValue
+                isTextFocused = true
+            } else if newValue == nil {
+                isTextFocused = false
+            }
+        }
     }
 
-    private func tagBinding(_ id: UUID) -> Binding<Bool> {
-        Binding(
-            get: { selectedTags.contains(id) },
-            set: { isOn in
-                var next = selectedTags
-                if isOn {
-                    next.insert(id)
-                } else {
-                    next.remove(id)
-                }
-                selectedTags = next
+    @ViewBuilder
+    private func previewForm(for item: ShoppingItem) -> some View {
+        Form {
+            Section {
+                Text(itemName.isEmpty ? item.name : itemName)
+                    .font(.body)
             }
-        )
+
+            Section(ShopStrings.tags) {
+                if selectedTags.isEmpty {
+                    Text(ShopStrings.noTags)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(dataStore.tags.filter { selectedTags.contains($0.id) }) { tag in
+                        HStack(spacing: ShopTheme.spacingSM) {
+                            Circle()
+                                .fill(tag.displayColor)
+                                .frame(width: 10, height: 10)
+                            Text(tag.name)
+                        }
+                    }
+                }
+            }
+
+            Section {
+                LabeledContent(ShopStrings.addedAt) {
+                    Text(createdAt.formatted(date: .abbreviated, time: .shortened))
+                }
+                if item.isCompleted {
+                    LabeledContent(ShopStrings.completedAtLabel) {
+                        Text(completedAt.formatted(date: .abbreviated, time: .shortened))
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { syncFromItem(item) }
+        .onChange(of: item.updatedAt) { _, _ in
+            syncFromItemIfNeeded(item)
+        }
+    }
+
+    @ViewBuilder
+    private func editingForm(for item: ShoppingItem) -> some View {
+        Form {
+            Section {
+                MacFocusableTextField(
+                    placeholder: ShopStrings.itemName,
+                    text: $itemName,
+                    isActive: editorField == .name,
+                    onTab: { focusNext(for: item) },
+                    onBacktab: { focusPrevious(for: item) },
+                    onMoveUp: { focusPrevious(for: item) },
+                    onMoveDown: { focusNext(for: item) },
+                    onSubmit: { save(item) },
+                    onBecomeActive: { setEditorField(.name) }
+                )
+            }
+
+            MacTagPickerSection(
+                selectedTagIDs: $selectedTags,
+                editorField: $editorField,
+                showsCompletedDate: item.isCompleted,
+                createdAt: $createdAt,
+                completedAt: $completedAt,
+                onNavigate: { forward in
+                    if forward { focusNext(for: item) } else { focusPrevious(for: item) }
+                },
+                onSelectTag: { setEditorField(.tag($0)) },
+                onSelectNewTagField: { setEditorField(.newTagName) },
+                onSelectCreatedAt: { setEditorField(.createdAt($0)) },
+                onSelectCompletedAt: { setEditorField(.completedAt($0)) },
+                onEscape: onEscape
+            )
+        }
+        .formStyle(.grouped)
+        .background {
+            MacEditorNavigationMonitor(
+                isEnabled: isEditing,
+                editorField: editorField,
+                onNavigate: { forward in
+                    if forward { focusNext(for: item) } else { focusPrevious(for: item) }
+                },
+                onSpace: { handleEditorSpace() },
+                onEscape: onEscape
+            )
+            .frame(width: 0, height: 0)
+        }
+        .onAppear { syncFromItem(item) }
+        .onChange(of: item.updatedAt) { _, _ in
+            syncFromItemIfNeeded(item)
+        }
+        .onChange(of: itemName) { _, _ in
+            deferSave(item)
+        }
+        .onChange(of: selectedTags) { _, _ in
+            deferSave(item)
+        }
+        .onChange(of: createdAt) { _, _ in
+            deferSave(item)
+        }
+        .onChange(of: completedAt) { _, _ in
+            deferSave(item)
+        }
+        .onChange(of: saveRequest) { _, _ in
+            save(item)
+        }
+        .onKeyPress(.return) {
+            save(item)
+            return .handled
+        }
+    }
+
+    private func focusNext(for item: ShoppingItem) {
+        advanceFocus(by: 1, for: item)
+    }
+
+    private func focusPrevious(for item: ShoppingItem) {
+        advanceFocus(by: -1, for: item)
+    }
+
+    private func advanceFocus(by step: Int, for item: ShoppingItem) {
+        let order = buildFieldOrder(for: item)
+        guard !order.isEmpty else { return }
+        guard let current = editorField, let index = order.firstIndex(of: current) else {
+            MacFocusDiag.log("Detail.advanceFocus current=nil -> \(String(describing: order.first)) count=\(order.count)")
+            if let first = order.first { setEditorField(first) }
+            return
+        }
+        let nextIndex = (index + step + order.count) % order.count
+        MacFocusDiag.log("Detail.advanceFocus \(String(describing: current)) -> \(String(describing: order[nextIndex])) step=\(step)")
+        setEditorField(order[nextIndex])
+    }
+
+    private func setEditorField(_ field: MacEditorFocus) {
+        editorField = field
+        if !field.usesTextInput {
+            MacKeyboardFocusHelper.resignKeyFocus()
+        }
+    }
+
+    private func handleEditorSpace() {
+        guard case .tag(let id) = editorField else { return }
+        if selectedTags.contains(id) {
+            selectedTags.remove(id)
+        } else {
+            selectedTags.insert(id)
+        }
+    }
+
+    private func buildFieldOrder(for item: ShoppingItem) -> [MacEditorFocus] {
+        var order: [MacEditorFocus] = [.name]
+        order.append(contentsOf: dataStore.tags.map { .tag($0.id) })
+        order.append(.newTagName)
+        order.append(contentsOf: MacDateSegment.systemOrdered.map { .createdAt($0) })
+        if item.isCompleted {
+            order.append(contentsOf: MacDateSegment.systemOrdered.map { .completedAt($0) })
+        }
+        return order
     }
 
     private func syncFromItem(_ item: ShoppingItem) {
@@ -1212,6 +1860,12 @@ private struct MacItemDetailView: View {
         syncFromItem(item)
     }
 
+    private func deferSave(_ item: ShoppingItem) {
+        DispatchQueue.main.async {
+            save(item)
+        }
+    }
+
     private func save(_ item: ShoppingItem) {
         let trimmed = itemName.trimmingCharacters(in: .whitespacesAndNewlines)
         let tags = dataStore.tags.filter { selectedTags.contains($0.id) }
@@ -1239,7 +1893,8 @@ private struct MacItemDetailView: View {
             tags: tagsUpdate,
             createdAt: createdChanged ? createdAt : nil,
             completedAt: item.isCompleted && completedChanged ? completedAt : nil,
-            updateCompletedAt: item.isCompleted && completedChanged
+            updateCompletedAt: item.isCompleted && completedChanged,
+            presentUndo: undoCoordinator.present
         )
     }
 }

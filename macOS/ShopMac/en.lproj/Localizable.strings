@@ -20,14 +20,20 @@
 "mac.empty_search_shortcut" = "Press ⌘F to search";
 "mac.detail_placeholder" = "Select an item to edit its name and tags";
 "mac.detail_missing_item" = "This item is no longer available.";
+"mac.draft_placeholder" = "New Item";
 
 /* Tags */
 "tags.title" = "Tags";
+"tags.all" = "All tags";
 "tag.add" = "Add Tag";
 "tag.name" = "Tag name";
 "tag.color" = "Color";
 "tag.manage" = "Manage Tags";
 "tag.none" = "No tags";
+"tag.rename" = "Rename…";
+"mac.tag_new" = "New Tag…";
+"mac.tag_rename_title" = "Rename Tag";
+"mac.tag_delete_confirm" = "Delete tag “%@”? Items will keep their other tags.";
 
 /* Filter */
 "filter.title" = "Filter";

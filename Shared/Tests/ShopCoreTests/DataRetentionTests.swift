@@ -68,6 +68,62 @@ final class DataRetentionTests: XCTestCase {
         XCTAssertFalse(result.didChange)
         XCTAssertNotNil(store.item(id: item.id)?.deletedAt)
     }
+
+    func testRecentlyCompletedOldCreatedItemIsNotPruned() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "test")
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let eightDays: TimeInterval = 8 * 24 * 60 * 60
+        let item = try store.addItem(
+            name: "Old then done",
+            tagIDs: [],
+            createdAt: now.addingTimeInterval(-eightDays * 3),
+            now: now.addingTimeInterval(-60)
+        )
+        try store.setCompleted(itemID: item.id, completed: true, now: now.addingTimeInterval(-60))
+
+        let result = try store.pruneExpiredData(retention: .oneWeek, now: now)
+        XCTAssertEqual(result.softDeletedItemCount, 0)
+        XCTAssertNil(store.item(id: item.id)?.deletedAt)
+        XCTAssertTrue(store.item(id: item.id)?.isCompleted == true)
+        XCTAssertEqual(store.archivedItems.map(\.id), [item.id])
+    }
+
+    func testPruneUsesCompletedAtNotCreatedAt() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "test")
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let eightDays: TimeInterval = 8 * 24 * 60 * 60
+        let item = try store.addItem(
+            name: "Created long ago",
+            tagIDs: [],
+            createdAt: now.addingTimeInterval(-eightDays * 5),
+            now: now.addingTimeInterval(-eightDays * 5)
+        )
+        // Completed recently — must stay in archive even though createdAt is ancient.
+        try store.setCompleted(itemID: item.id, completed: true, now: now.addingTimeInterval(-60))
+
+        let result = try store.pruneExpiredData(retention: .oneWeek, now: now)
+        XCTAssertEqual(result.softDeletedItemCount, 0)
+        XCTAssertNil(store.item(id: item.id)?.deletedAt)
+        XCTAssertEqual(store.archivedItems.map(\.id), [item.id])
+    }
+
+    func testPruneNeverTouchesActiveItems() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "test")
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let eightDays: TimeInterval = 8 * 24 * 60 * 60
+        let item = try store.addItem(
+            name: "Still to buy",
+            tagIDs: [],
+            createdAt: now.addingTimeInterval(-eightDays * 10),
+            now: now.addingTimeInterval(-eightDays * 10)
+        )
+
+        let result = try store.pruneExpiredData(retention: .oneWeek, now: now)
+        XCTAssertEqual(result.softDeletedItemCount, 0)
+        XCTAssertFalse(item.isCompleted)
+        XCTAssertNil(store.item(id: item.id)?.deletedAt)
+        XCTAssertEqual(store.activeItems.map(\.id), [item.id])
+    }
 }
 
 private extension Date {

@@ -13,7 +13,7 @@ public struct ItemListSections: Equatable, Sendable {
         !activeGroups.isEmpty
     }
 
-    public enum DisplayRow: Equatable, Sendable {
+    public enum DisplayRow: Equatable, Hashable, Sendable {
         case activeItem(UUID)
         case archiveHeader
         case archivedItem(UUID)

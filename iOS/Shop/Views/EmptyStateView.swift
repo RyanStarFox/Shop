@@ -47,7 +47,7 @@ struct ActiveFilterBar: View {
                 if currentFilter != .all {
                     FilterChip(
                         label: filterLabel,
-                        color: ShopTheme.naturalGreen
+                        color: ShopTheme.brandColor
                     ) {
                         currentFilter = .all
                     }

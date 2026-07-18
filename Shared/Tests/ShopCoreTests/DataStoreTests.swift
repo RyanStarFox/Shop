@@ -14,6 +14,12 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(dataStore.items.first?.name, "Milk")
     }
 
+    func testAddItemWithCustomCreatedAt() {
+        let stamp = Date(timeIntervalSince1970: 1_700_000_000)
+        dataStore.addItem(name: "Milk", createdAt: stamp)
+        XCTAssertEqual(dataStore.items.first?.createdAt, stamp)
+    }
+
     func testToggleItem() {
         dataStore.addItem(name: "Bread")
         let item = dataStore.items.first!
@@ -104,9 +110,72 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(dataStore.filteredItems.first?.name, "Important task")
     }
 
+    func testEmptySelectedTagsMeansAllTags() {
+        dataStore.addTag(name: "Food", colorHex: "#34C759")
+        let tag = dataStore.tags.first!
+        dataStore.addItem(name: "Milk", tags: [tag])
+        dataStore.addItem(name: "No tag item")
+
+        dataStore.selectedTags = []
+        XCTAssertEqual(dataStore.filteredItems.count, 2)
+
+        dataStore.selectedTags = [tag.id]
+        XCTAssertEqual(dataStore.filteredItems.map(\.name), ["Milk"])
+    }
+
+    func testTagMatchModeAnyIsOR() {
+        dataStore.addTag(name: "A", colorHex: "#007AFF")
+        dataStore.addTag(name: "B", colorHex: "#34C759")
+        let a = dataStore.tags.first { $0.name == "A" }!
+        let b = dataStore.tags.first { $0.name == "B" }!
+        dataStore.addItem(name: "Only A", tags: [a])
+        dataStore.addItem(name: "Only B", tags: [b])
+        dataStore.addItem(name: "Both", tags: [a, b])
+
+        dataStore.selectedTags = [a.id, b.id]
+        dataStore.tagMatchMode = .any
+        XCTAssertEqual(Set(dataStore.filteredItems.map(\.name)), ["Only A", "Only B", "Both"])
+    }
+
+    func testTagMatchModeAllIsAND() {
+        dataStore.addTag(name: "A", colorHex: "#007AFF")
+        dataStore.addTag(name: "B", colorHex: "#34C759")
+        let a = dataStore.tags.first { $0.name == "A" }!
+        let b = dataStore.tags.first { $0.name == "B" }!
+        dataStore.addItem(name: "Only A", tags: [a])
+        dataStore.addItem(name: "Only B", tags: [b])
+        dataStore.addItem(name: "Both", tags: [a, b])
+
+        dataStore.selectedTags = [a.id, b.id]
+        dataStore.tagMatchMode = .all
+        XCTAssertEqual(dataStore.filteredItems.map(\.name), ["Both"])
+    }
+
+    func testRestoredTagSelectionDropsDeletedTags() {
+        let existingTag = Tag(name: "Existing")
+        let deletedTagID = UUID()
+
+        XCTAssertEqual(
+            DataStore.validSelectedTagIDs(
+                [existingTag.id, deletedTagID],
+                availableTags: [existingTag]
+            ),
+            [existingTag.id]
+        )
+    }
+
     func testShopHexColorValidation() {
         XCTAssertNotNil(Color(shopHex: "#34C759"))
         XCTAssertNil(Color(shopHex: "invalid"))
+    }
+
+    func testShopHexColorNormalize() {
+        XCTAssertEqual(ShopHexColor.normalize("#34C759"), "#34C759")
+        XCTAssertEqual(ShopHexColor.normalize("34c759"), "#34C759")
+        XCTAssertEqual(ShopHexColor.normalize("#F0A"), "#FF00AA")
+        XCTAssertEqual(ShopHexColor.normalize("3C5"), "#33CC55")
+        XCTAssertNil(ShopHexColor.normalize("invalid"))
+        XCTAssertNil(ShopHexColor.normalize(""))
     }
 
     func testTagProvidesDisplayColor() {
@@ -283,6 +352,36 @@ final class DataStoreTests: XCTestCase {
         guard case .fetchFailed = dataStore.lastError else {
             return XCTFail("Expected typed decode failure")
         }
+    }
+
+    func testPublishWidgetSnapshotIncludesRecentlyCompletedAndTagIDs() {
+        dataStore.addTag(name: "Dairy", colorHex: "#007AFF")
+        let tag = dataStore.tags.first!
+        dataStore.addItem(name: "Milk", tags: [tag])
+        dataStore.addItem(name: "Bread")
+        let milk = dataStore.activeItems.first { $0.name == "Milk" }!
+        dataStore.toggleItem(milk)
+
+        dataStore.publishWidgetSnapshot()
+        let snapshot = WidgetSnapshotStore.load()
+
+        XCTAssertEqual(snapshot.items.map(\.name), ["Bread"])
+        XCTAssertEqual(snapshot.recentlyCompleted.map(\.name), ["Milk"])
+        XCTAssertEqual(snapshot.recentlyCompleted.first?.tags.first?.id, tag.id)
+        XCTAssertTrue(snapshot.availableTags.contains { $0.id == tag.id })
+    }
+
+    func testApplyPendingRestoreUncompletesItem() {
+        dataStore.addItem(name: "Milk")
+        let item = dataStore.items.first!
+        dataStore.toggleItem(item)
+        XCTAssertTrue(item.isCompleted)
+
+        WidgetSnapshotStore.enqueuePendingRestore(item.id)
+        dataStore.applyPendingWidgetMutations()
+
+        XCTAssertFalse(dataStore.items.first { $0.id == item.id }!.isCompleted)
+        XCTAssertTrue(WidgetSnapshotStore.loadPendingRestores().isEmpty)
     }
 
     private func snapshot(

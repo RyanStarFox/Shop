@@ -225,6 +225,16 @@ struct SettingsView: View {
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
 
+                                Button {
+                                    NotificationCenter.default.post(name: .shopShowOnboarding, object: nil)
+                                    dismiss()
+                                } label: {
+                                    Label(ShopStrings.viewTutorial, systemImage: "book")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(ShopTheme.brandColor)
+
                                 Link(destination: ShopLinks.githubRepository) {
                                     HStack(spacing: ShopTheme.spacingXS) {
                                         Image(systemName: "link")
@@ -235,7 +245,7 @@ struct SettingsView: View {
                                         Image(systemName: "arrow.up.right")
                                             .font(.caption2)
                                     }
-                                    .foregroundStyle(ShopTheme.brandRed)
+                                    .foregroundStyle(ShopTheme.brandColor)
                                 }
                                 .accessibilityLabel(ShopStrings.githubRepository)
                             }

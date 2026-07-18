@@ -1,11 +1,8 @@
 import SwiftUI
 
 public enum ShopTheme {
-    /// Brand red matched to the shopping-cart logo.
-    public static let brandRed = Color(shopHex: "#E0312C") ?? .red
-
-    /// Backwards-compatible alias used across existing call sites.
-    public static let naturalGreen = brandRed
+    /// Brand accent color (shopping-cart logo).
+    public static let brandColor = Color(shopHex: "#C53A32") ?? .red
 
     public static let spacingXS: CGFloat = 4
     public static let spacingSM: CGFloat = 8

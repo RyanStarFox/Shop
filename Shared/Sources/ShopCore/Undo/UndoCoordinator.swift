@@ -19,55 +19,44 @@ public struct UndoAction: Identifiable {
 
 @MainActor
 public final class UndoCoordinator: ObservableObject {
-    public typealias Sleep = @Sendable (TimeInterval) async -> Void
     public typealias MutationPerformer = (@MainActor () throws -> Void) throws -> Void
 
-    @Published public private(set) var currentAction: UndoAction?
+    @Published public private(set) var undoStack: [UndoAction] = []
 
-    private let duration: TimeInterval
-    private let sleep: Sleep
+    public var currentAction: UndoAction? { undoStack.last }
+    public var canUndo: Bool { !undoStack.isEmpty }
+
+    private let maxHistoryCount: Int
     private let performMutation: MutationPerformer
-    private var expiryGeneration = 0
 
     public init(
-        duration: TimeInterval = 5,
-        sleep: @escaping Sleep = UndoCoordinator.defaultSleep,
+        maxHistoryCount: Int = 50,
         performMutation: @escaping MutationPerformer = { try $0() }
     ) {
-        self.duration = duration
-        self.sleep = sleep
+        self.maxHistoryCount = max(1, maxHistoryCount)
         self.performMutation = performMutation
     }
 
     public func present(_ action: UndoAction) {
-        expiryGeneration += 1
-        let generation = expiryGeneration
-        currentAction = action
-
-        let duration = self.duration
-        let sleep = self.sleep
-        Task { @MainActor [weak self] in
-            await sleep(duration)
-            guard let self, self.expiryGeneration == generation else {
-                return
-            }
-            self.currentAction = nil
+        undoStack.append(action)
+        if undoStack.count > maxHistoryCount {
+            undoStack.removeFirst(undoStack.count - maxHistoryCount)
         }
     }
 
     public func dismiss() {
-        expiryGeneration += 1
-        currentAction = nil
+        guard !undoStack.isEmpty else { return }
+        undoStack.removeLast()
     }
 
     public func undo() throws {
-        guard let action = currentAction else { return }
-        try performMutation(action.perform)
-        dismiss()
-    }
-
-    public static func defaultSleep(_ interval: TimeInterval) async {
-        try? await Task.sleep(for: .seconds(interval))
+        guard let action = undoStack.last else { return }
+        do {
+            try performMutation(action.perform)
+            undoStack.removeLast()
+        } catch {
+            throw error
+        }
     }
 }
 
@@ -145,6 +134,29 @@ public enum ShoppingUndo {
     ) -> UndoAction {
         UndoAction(message: ShopStrings.undoBatchTagsChanged) {
             try store.restoreTagMemberships(previousMemberships, now: now)
+        }
+    }
+
+    public static func undoItemEdit(
+        itemID: UUID,
+        previousName: String,
+        previousTagIDs: [UUID],
+        previousCreatedAt: Date,
+        previousIsCompleted: Bool,
+        previousCompletedAt: Date?,
+        store: ShoppingStore,
+        now: Date = Date()
+    ) -> UndoAction {
+        UndoAction(message: ShopStrings.undoItemEdited) {
+            try store.restoreItemFields(
+                itemID: itemID,
+                name: previousName,
+                tagIDs: previousTagIDs,
+                createdAt: previousCreatedAt,
+                isCompleted: previousIsCompleted,
+                completedAt: previousCompletedAt,
+                now: now
+            )
         }
     }
 }

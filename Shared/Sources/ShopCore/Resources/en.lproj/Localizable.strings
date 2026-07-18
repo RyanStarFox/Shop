@@ -3,6 +3,8 @@
 "undo.item_completed" = "Marked as completed";
 "undo.item_restored" = "Restored to list";
 "undo.item_deleted" = "Item deleted";
+"undo.item_edited" = "Item edit undone";
+"tag.toggle_hint" = "Press Space to toggle this tag";
 "undo.tag_deleted" = "Tag deleted";
 "undo.batch_items_changed" = "Undo batch change";
 "undo.batch_items_deleted" = "Undo batch delete";
@@ -93,3 +95,18 @@
 "watch.error.unsupported_version" = "Watch sync snapshot version %@ is not supported.";
 "watch.error.file_read_failed" = "Unable to read the Watch sync file: %@";
 "watch.error.file_cleanup_failed" = "Unable to remove a Watch sync temporary file: %@";
+
+/* App / items used by extensions */
+"app.name" = "Shop !";
+"item.empty" = "No items yet. Tap + to add one!";
+"item.pending_count" = "%d to buy";
+"widget.empty" = "No items to buy";
+"widget.description" = "See pending shopping items and mark them purchased.";
+"widget.recently_completed" = "Recently Completed";
+"widget.add_item" = "Add Item";
+"widget.restore_item" = "Restore to Pending";
+"widget.filter_all_tags" = "All Tags";
+"widget.match_any" = "Match Any";
+"widget.match_all" = "Match All";
+"widget.filter_empty" = "No items for this filter";
+"widget.unavailable" = "Open Shop! once. If still empty, App Groups may be unavailable (common with AltStore).";

@@ -19,6 +19,9 @@ public final class DataStore: ObservableObject {
     @Published public var selectedTags: Set<UUID> = [] {
         didSet { persistListPreferences() }
     }
+    @Published public var tagMatchMode: WidgetTagMatchMode = .any {
+        didSet { persistListPreferences() }
+    }
     @Published public var dateRange: ClosedRange<Date>? {
         didSet { persistListPreferences() }
     }
@@ -142,7 +145,13 @@ public final class DataStore: ObservableObject {
 
         if !selectedTags.isEmpty {
             result = result.filter { item in
-                !selectedTags.isDisjoint(with: Set(item.tags.map(\.id)))
+                let ids = Set(item.tags.map(\.id))
+                switch tagMatchMode {
+                case .any:
+                    return !selectedTags.isDisjoint(with: ids)
+                case .all:
+                    return selectedTags.isSubset(of: ids)
+                }
             }
         }
 
@@ -314,9 +323,16 @@ public final class DataStore: ObservableObject {
         tags: [Tag]? = nil,
         createdAt: Date? = nil,
         completedAt: Date? = nil,
-        updateCompletedAt: Bool = false
+        updateCompletedAt: Bool = false,
+        presentUndo: ((UndoAction) -> Void)? = nil
     ) {
-        performMutation {
+        let previousName = item.name
+        let previousTagIDs = item.tags.map(\.id)
+        let previousCreatedAt = item.createdAt
+        let previousIsCompleted = item.isCompleted
+        let previousCompletedAt = item.completedAt
+
+        let succeeded = performMutation {
             try shoppingStore.updateItem(
                 itemID: item.id,
                 name: name,
@@ -326,6 +342,18 @@ public final class DataStore: ObservableObject {
                 updateCompletedAt: updateCompletedAt
             )
         }
+        guard succeeded, let presentUndo else { return }
+        presentUndo(
+            ShoppingUndo.undoItemEdit(
+                itemID: item.id,
+                previousName: previousName,
+                previousTagIDs: previousTagIDs,
+                previousCreatedAt: previousCreatedAt,
+                previousIsCompleted: previousIsCompleted,
+                previousCompletedAt: previousCompletedAt,
+                store: shoppingStore
+            )
+        )
     }
 
     public func moveItems(from source: IndexSet, to destination: Int) {
@@ -488,21 +516,56 @@ public final class DataStore: ObservableObject {
         return false
     }
 
-    /// Writes active items for Home Screen / Desktop widgets.
+    /// Writes active items, recently completed, and tags for Home Screen / Desktop widgets.
     public func publishWidgetSnapshot() {
+        let mappedTags: ([Tag]) -> [(id: UUID, name: String, colorHex: String)] = { tags in
+            tags
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                .map { (id: $0.id, name: $0.name, colorHex: $0.colorHex) }
+        }
+
+        let completed = archivedItems
+            .compactMap { item -> (id: UUID, name: String, sortOrder: Int, tags: [(id: UUID, name: String, colorHex: String)], completedAt: Date)? in
+                guard let completedAt = item.completedAt else { return nil }
+                return (
+                    id: item.id,
+                    name: item.name,
+                    sortOrder: item.sortOrder,
+                    tags: mappedTags(item.tags),
+                    completedAt: completedAt
+                )
+            }
+            .sorted { $0.completedAt > $1.completedAt }
+
         WidgetSnapshotStore.publish(
-            activeItems: activeItems.map { ($0.id, $0.name, $0.sortOrder) }
+            activeItems: activeItems.map { item in
+                (
+                    id: item.id,
+                    name: item.name,
+                    sortOrder: item.sortOrder,
+                    tags: mappedTags(item.tags)
+                )
+            },
+            recentlyCompleted: completed,
+            availableTags: tags.map { (id: $0.id, name: $0.name, colorHex: $0.colorHex) }
         )
     }
 
     /// Applies completions queued by the widget extension, then refreshes the snapshot.
     public func applyPendingWidgetCompletions() {
-        let pending = WidgetSnapshotStore.loadPendingCompletions()
-        guard !pending.isEmpty else {
+        applyPendingWidgetMutations()
+    }
+
+    /// Applies widget completion and restore queues, then republishes the authoritative snapshot.
+    public func applyPendingWidgetMutations() {
+        let completions = WidgetSnapshotStore.loadPendingCompletions()
+        let restores = WidgetSnapshotStore.loadPendingRestores()
+        guard !completions.isEmpty || !restores.isEmpty else {
             publishWidgetSnapshot()
             return
         }
-        for id in pending {
+
+        for id in completions {
             do {
                 try shoppingStore.setCompleted(itemID: id, completed: true)
             } catch {
@@ -510,6 +573,16 @@ public final class DataStore: ObservableObject {
             }
         }
         WidgetSnapshotStore.clearPendingCompletions()
+
+        for id in restores {
+            do {
+                try shoppingStore.setCompleted(itemID: id, completed: false)
+            } catch {
+                // Item may already be pending or deleted; ignore.
+            }
+        }
+        WidgetSnapshotStore.clearPendingRestores()
+
         lastError = nil
         localMutationObservers.values.forEach { $0() }
         fetchData()
@@ -533,6 +606,7 @@ public final class DataStore: ObservableObject {
         static let sort = "shop.list.sort"
         static let group = "shop.list.group"
         static let selectedTags = "shop.list.selectedTags"
+        static let tagMatchMode = "shop.list.tagMatchMode"
         static let dateRangeStart = "shop.list.dateRange.start"
         static let dateRangeEnd = "shop.list.dateRange.end"
         static let dataRetention = "shop.data.retention"
@@ -561,13 +635,31 @@ public final class DataStore: ObservableObject {
             dataRetention = value
         }
         if let raw = defaults.array(forKey: PreferenceKey.selectedTags) as? [String] {
-            selectedTags = Set(raw.compactMap(UUID.init(uuidString:)))
+            selectedTags = Self.validSelectedTagIDs(
+                Set(raw.compactMap(UUID.init(uuidString:))),
+                availableTags: tags
+            )
+            defaults.set(
+                selectedTags.map(\.uuidString).sorted(),
+                forKey: PreferenceKey.selectedTags
+            )
+        }
+        if let raw = defaults.string(forKey: PreferenceKey.tagMatchMode),
+           let value = WidgetTagMatchMode(rawValue: raw) {
+            tagMatchMode = value
         }
         if let start = defaults.object(forKey: PreferenceKey.dateRangeStart) as? Date,
            let end = defaults.object(forKey: PreferenceKey.dateRangeEnd) as? Date,
            start <= end {
             dateRange = start...end
         }
+    }
+
+    static func validSelectedTagIDs(
+        _ selectedIDs: Set<UUID>,
+        availableTags: [Tag]
+    ) -> Set<UUID> {
+        selectedIDs.intersection(availableTags.map(\.id))
     }
 
     private func persistListPreferences() {
@@ -581,6 +673,7 @@ public final class DataStore: ObservableObject {
             selectedTags.map(\.uuidString).sorted(),
             forKey: PreferenceKey.selectedTags
         )
+        defaults.set(tagMatchMode.rawValue, forKey: PreferenceKey.tagMatchMode)
         if let dateRange {
             defaults.set(dateRange.lowerBound, forKey: PreferenceKey.dateRangeStart)
             defaults.set(dateRange.upperBound, forKey: PreferenceKey.dateRangeEnd)

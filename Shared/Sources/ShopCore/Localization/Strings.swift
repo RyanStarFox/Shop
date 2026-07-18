@@ -3,7 +3,7 @@ import Foundation
 public enum ShopStrings {
     // MARK: - App
     public static var appName: String {
-        NSLocalizedString("app.name", comment: "App name")
+        NSLocalizedString("app.name", bundle: .module, comment: "App name")
     }
 
     // MARK: - Items
@@ -20,7 +20,37 @@ public enum ShopStrings {
         NSLocalizedString("item.search", comment: "Search items")
     }
     public static var emptyList: String {
-        NSLocalizedString("item.empty", comment: "No items yet")
+        NSLocalizedString("item.empty", bundle: .module, comment: "No items yet")
+    }
+    public static var widgetEmpty: String {
+        NSLocalizedString("widget.empty", bundle: .module, comment: "Widget empty state")
+    }
+    public static var widgetDescription: String {
+        NSLocalizedString("widget.description", bundle: .module, comment: "Widget gallery description")
+    }
+    public static var widgetRecentlyCompleted: String {
+        NSLocalizedString("widget.recently_completed", bundle: .module, comment: "Recently completed section")
+    }
+    public static var widgetAddItem: String {
+        NSLocalizedString("widget.add_item", bundle: .module, comment: "Widget add item accessibility")
+    }
+    public static var widgetRestoreItem: String {
+        NSLocalizedString("widget.restore_item", bundle: .module, comment: "Restore completed item")
+    }
+    public static var widgetFilterAllTags: String {
+        NSLocalizedString("widget.filter_all_tags", bundle: .module, comment: "All tags filter option")
+    }
+    public static var widgetMatchAny: String {
+        NSLocalizedString("widget.match_any", bundle: .module, comment: "OR match mode")
+    }
+    public static var widgetMatchAll: String {
+        NSLocalizedString("widget.match_all", bundle: .module, comment: "AND match mode")
+    }
+    public static var widgetFilterEmpty: String {
+        NSLocalizedString("widget.filter_empty", bundle: .module, comment: "No items for filter")
+    }
+    public static var widgetUnavailable: String {
+        NSLocalizedString("widget.unavailable", bundle: .module, comment: "App Group unavailable for widget")
     }
     public static var markComplete: String {
         NSLocalizedString("item.mark_complete", comment: "Mark complete")
@@ -158,7 +188,7 @@ public enum ShopStrings {
     }
     public static func pendingCount(_ count: Int) -> String {
         String(
-            format: NSLocalizedString("item.pending_count", comment: "Pending item count"),
+            format: NSLocalizedString("item.pending_count", bundle: .module, comment: "Pending item count"),
             locale: .current,
             count
         )
@@ -454,6 +484,12 @@ public enum ShopStrings {
     }
     public static var undoItemDeleted: String {
         NSLocalizedString("undo.item_deleted", bundle: .module, comment: "Item deleted")
+    }
+    public static var undoItemEdited: String {
+        NSLocalizedString("undo.item_edited", bundle: .module, comment: "Item edit undone")
+    }
+    public static var tagToggleHint: String {
+        NSLocalizedString("tag.toggle_hint", bundle: .module, comment: "Space toggles tag")
     }
     public static var undoTagDeleted: String {
         NSLocalizedString("undo.tag_deleted", bundle: .module, comment: "Tag deleted")

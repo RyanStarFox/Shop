@@ -70,7 +70,6 @@ final class DataStoreBatchTests: XCTestCase {
         store.addItem(name: "B")
         let ids = store.items.map(\.id)
         let coordinator = UndoCoordinator(
-            duration: 60,
             performMutation: { mutation in
                 try store.performUndoMutation(mutation)
             }
@@ -89,7 +88,6 @@ final class DataStoreBatchTests: XCTestCase {
         store.addItem(name: "B")
         let ids = store.items.map(\.id)
         let coordinator = UndoCoordinator(
-            duration: 60,
             performMutation: { mutation in
                 try store.performUndoMutation(mutation)
             }

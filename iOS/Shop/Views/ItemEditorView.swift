@@ -18,7 +18,7 @@ struct ItemEditorView: View {
     @State private var completedAt = Date()
     @State private var showDiscardConfirmation = false
     @State private var newTagName = ""
-    @State private var newTagColor = "#E0312C"
+    @State private var newTagColor = "#C53A32"
     @FocusState private var isNameFocused: Bool
     @FocusState private var isNewTagFocused: Bool
 
@@ -51,7 +51,8 @@ struct ItemEditorView: View {
     private var hasUnsavedChanges: Bool {
         switch mode {
         case .add:
-            return !trimmedName.isEmpty || !selectedTags.isEmpty
+            let createdChanged = !Calendar.current.isDate(createdAt, equalTo: Date(), toGranularity: .minute)
+            return !trimmedName.isEmpty || !selectedTags.isEmpty || createdChanged
         case .edit(let item):
             let originalTags = Set(item.tags.map(\.id))
             let createdChanged = !Calendar.current.isDate(createdAt, equalTo: item.createdAt, toGranularity: .minute)
@@ -119,7 +120,7 @@ struct ItemEditorView: View {
                                 Spacer(minLength: 0)
                                 if selectedTags.contains(tag.id) {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(ShopTheme.brandRed)
+                                        .foregroundStyle(ShopTheme.brandColor)
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: ShopTheme.minTouchTarget, alignment: .leading)
@@ -188,28 +189,26 @@ struct ItemEditorView: View {
                     .padding(.vertical, ShopTheme.spacingXS)
                 }
 
-                if case .edit = mode {
-                    Section {
-                        DisclosureGroup {
+                Section {
+                    DisclosureGroup {
+                        DatePicker(
+                            ShopStrings.addedAt,
+                            selection: $createdAt,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        if editingItem?.isCompleted == true {
                             DatePicker(
-                                ShopStrings.addedAt,
-                                selection: $createdAt,
+                                ShopStrings.completedAtLabel,
+                                selection: $completedAt,
                                 displayedComponents: [.date, .hourAndMinute]
                             )
-                            if editingItem?.isCompleted == true {
-                                DatePicker(
-                                    ShopStrings.completedAtLabel,
-                                    selection: $completedAt,
-                                    displayedComponents: [.date, .hourAndMinute]
-                                )
-                            }
-                        } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(ShopStrings.datesSection)
-                                Text(datesSummary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(ShopStrings.datesSection)
+                            Text(datesSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -253,7 +252,7 @@ struct ItemEditorView: View {
             }
             .onAppear(perform: loadInitialState)
         }
-        .tint(ShopTheme.brandRed)
+        .tint(ShopTheme.brandColor)
     }
 
     private func loadInitialState() {
@@ -287,13 +286,13 @@ struct ItemEditorView: View {
             selectedTags.insert(created.id)
         }
         newTagName = ""
-        newTagColor = "#E0312C"
+        newTagColor = "#C53A32"
         isNewTagFocused = false
     }
 
     private func customColorBinding(for hex: Binding<String>) -> Binding<Color> {
         Binding(
-            get: { Color(shopHex: hex.wrappedValue) ?? ShopTheme.brandRed },
+            get: { Color(shopHex: hex.wrappedValue) ?? ShopTheme.brandColor },
             set: { color in
                 if let value = color.shopHexString {
                     hex.wrappedValue = value
@@ -308,7 +307,7 @@ struct ItemEditorView: View {
 
         switch mode {
         case .add:
-            dataStore.addItem(name: trimmedName, tags: tags)
+            dataStore.addItem(name: trimmedName, tags: tags, createdAt: createdAt)
         case .edit(let item):
             dataStore.updateItem(
                 item,

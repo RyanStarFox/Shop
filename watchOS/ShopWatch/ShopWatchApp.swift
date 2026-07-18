@@ -14,18 +14,19 @@ struct ShopWatchApp: App {
             WatchContentView()
                 .environmentObject(dataStore)
                 .environmentObject(watchSync)
-                .tint(ShopTheme.naturalGreen)
+                .tint(ShopTheme.brandColor)
                 .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
                 .onAppear {
                     watchSync.configure(with: dataStore)
-                    dataStore.pruneExpiredData()
                     watchSync.requestLatestSnapshot()
+                    watchSync.sendLatestSnapshot()
+                    dataStore.pruneExpiredData()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
-                    dataStore.pruneExpiredData()
                     watchSync.requestLatestSnapshot()
                     watchSync.sendLatestSnapshot()
+                    dataStore.pruneExpiredData()
                 }
         }
     }

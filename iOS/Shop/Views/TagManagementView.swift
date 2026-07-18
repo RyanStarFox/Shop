@@ -7,7 +7,7 @@ struct TagManagementView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var newTagName = ""
-    @State private var newTagColor = "#E0312C"
+    @State private var newTagColor = "#C53A32"
     @State private var editingTag: Tag? = nil
     @State private var editingName = ""
     @State private var editingColor = ""
@@ -157,12 +157,12 @@ struct TagManagementView: View {
         guard !name.isEmpty else { return }
         dataStore.addTag(name: name, colorHex: newTagColor)
         newTagName = ""
-        newTagColor = "#E0312C"
+        newTagColor = "#C53A32"
     }
 
     private func customColorBinding(for hex: Binding<String>) -> Binding<Color> {
         Binding(
-            get: { Color(shopHex: hex.wrappedValue) ?? ShopTheme.brandRed },
+            get: { Color(shopHex: hex.wrappedValue) ?? ShopTheme.brandColor },
             set: { color in
                 if let value = color.shopHexString {
                     hex.wrappedValue = value
@@ -266,7 +266,7 @@ struct TagEditRow: View {
 
                     ColorPicker(
                         selection: Binding(
-                            get: { Color(shopHex: tag.colorHex) ?? ShopTheme.brandRed },
+                            get: { Color(shopHex: tag.colorHex) ?? ShopTheme.brandColor },
                             set: { color in
                                 if let hex = color.shopHexString {
                                     onColorChange(hex)

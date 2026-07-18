@@ -33,6 +33,12 @@ struct MacSettingsView: View {
                 Text(ShopStrings.dataRetentionFooter)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Button {
+                    NotificationCenter.default.post(name: .shopShowOnboarding, object: nil)
+                } label: {
+                    Label(ShopStrings.viewTutorial, systemImage: "book")
+                }
             }
             .formStyle(.grouped)
             .padding()
@@ -64,7 +70,7 @@ struct MacSettingsView: View {
                 }
         }
         .frame(width: 480, height: 460)
-        .tint(ShopTheme.naturalGreen)
+        .tint(ShopTheme.brandColor)
         .onAppear {
             webdavSync.migrateLegacyPasswordIfNeeded(
                 serverURL: webdavServer,
@@ -308,7 +314,7 @@ private struct MacTagEditRow: View {
                     }
                 } label: {
                     Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil.circle")
-                        .foregroundStyle(isEditing ? ShopTheme.naturalGreen : .secondary)
+                        .foregroundStyle(isEditing ? ShopTheme.brandColor : .secondary)
                 }
                 .buttonStyle(.plain)
                 .help(isEditing ? ShopStrings.saveItem : ShopStrings.editItem)
@@ -347,39 +353,5 @@ private struct MacTagEditRow: View {
 }
 
 // MARK: - Shared Palette
+// See MacTagEditorComponents.swift
 
-private enum MacTagPalette {
-    static let colors: [(String, Color)] = [
-        ("#007AFF", .blue), ("#34C759", .green), ("#FF9500", .orange),
-        ("#FF3B30", .red), ("#AF52DE", .purple), ("#FF2D55", .pink),
-        ("#5856D6", .indigo), ("#00C7BE", .teal), ("#FFD60A", .yellow), ("#8E8E93", .gray)
-    ]
-}
-
-private struct MacTagColorPicker: View {
-    @Binding var selectedColor: String
-    let colors: [(String, Color)]
-    var dotSize: CGFloat = 20
-
-    var body: some View {
-        HStack(spacing: ShopTheme.spacingXS) {
-            ForEach(colors.prefix(5), id: \.0) { hex, color in
-                Button {
-                    selectedColor = hex
-                } label: {
-                    Circle()
-                        .fill(color)
-                        .frame(width: dotSize, height: dotSize)
-                        .overlay {
-                            if selectedColor == hex {
-                                Circle()
-                                    .stroke(.white, lineWidth: 2)
-                                    .frame(width: dotSize + 2, height: dotSize + 2)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}

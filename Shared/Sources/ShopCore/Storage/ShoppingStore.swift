@@ -137,6 +137,28 @@ public final class ShoppingStore {
         }
     }
 
+    public func restoreItemFields(
+        itemID: UUID,
+        name: String,
+        tagIDs: [UUID],
+        createdAt: Date,
+        isCompleted: Bool,
+        completedAt: Date?,
+        now: Date = Date()
+    ) throws {
+        guard let item = item(id: itemID) else {
+            throw ShoppingStoreError.itemNotFound(itemID)
+        }
+        let selectedTags = try activeTags(ids: tagIDs)
+        item.name = name
+        item.tags = selectedTags
+        item.createdAt = createdAt
+        item.isCompleted = isCompleted
+        item.completedAt = completedAt
+        advanceVersion(of: item, now: now)
+        try save()
+    }
+
     public func updateItem(
         itemID: UUID,
         name: String? = nil,

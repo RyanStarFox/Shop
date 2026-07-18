@@ -117,7 +117,7 @@ struct GlassButton: View {
             .padding(.vertical, ShopTheme.spacingSM + 4)
             .frame(maxWidth: isFullWidth ? .infinity : nil)
             .frame(minHeight: ShopTheme.minTouchTarget)
-            .background(ShopTheme.brandRed.gradient, in: Capsule(style: .continuous))
+            .background(ShopTheme.brandColor.gradient, in: Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isButton)

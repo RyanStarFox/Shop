@@ -160,8 +160,10 @@ public final class SyncCoordinator: ObservableObject {
         }
         let local = try dataStore.shoppingStore.makeSnapshot(now: now())
         let merged = SnapshotMerger().merge(local: local, remote: remote.snapshot)
-        try dataStore.shoppingStore.apply(snapshot: merged)
+        // Apply the already-merged snapshot directly — do not merge again inside apply().
+        try dataStore.shoppingStore.applyCanonicalSnapshot(merged)
         dataStore.fetchData()
+        dataStore.publishWidgetSnapshot()
         return try dataStore.shoppingStore.makeSnapshot(now: now())
     }
 

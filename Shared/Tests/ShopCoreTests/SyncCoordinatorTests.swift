@@ -135,6 +135,205 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(Set(try XCTUnwrap(transport.putSnapshots.first).items.map(\.name)), ["Local", "Remote"])
     }
 
+    func testRemoteCompletionSyncsAsArchiveNotDeletion() async throws {
+        let mac = DataStore(inMemory: true, deviceID: "mac")
+        mac.addItem(name: "Milk")
+        let itemID = try XCTUnwrap(mac.items.first?.id)
+
+        let phone = DataStore(inMemory: true, deviceID: "iphone")
+        try phone.shoppingStore.applyCanonicalSnapshot(try mac.shoppingStore.makeSnapshot())
+        phone.fetchData()
+        let phoneItem = try XCTUnwrap(phone.items.first { $0.id == itemID })
+        phone.setCompleted(phoneItem, completed: true, presentUndo: { _ in })
+
+        let remoteSnapshot = try phone.shoppingStore.makeSnapshot()
+        XCTAssertEqual(remoteSnapshot.items.first?.isCompleted, true)
+        XCTAssertNil(remoteSnapshot.items.first?.deletedAt)
+
+        let transport = FakeCoordinatorTransport(
+            fetchResults: [.success(RemoteSnapshot(snapshot: remoteSnapshot, etag: "\"v1\""))]
+        )
+        let coordinator = SyncCoordinator(dataStore: mac, transport: transport)
+        await coordinator.syncNow()
+
+        let synced = try XCTUnwrap(mac.items.first { $0.id == itemID })
+        XCTAssertTrue(synced.isCompleted)
+        XCTAssertNil(synced.deletedAt)
+        XCTAssertEqual(mac.archivedItems.map(\.id), [itemID])
+        XCTAssertTrue(mac.activeItems.isEmpty)
+        XCTAssertEqual(try XCTUnwrap(transport.putSnapshots.first).items.first?.isCompleted, true)
+        XCTAssertNil(try XCTUnwrap(transport.putSnapshots.first).items.first?.deletedAt)
+    }
+
+    func testPruneBeforeSyncCanLoseFresherRemoteCompletion() async throws {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let eightDays: TimeInterval = 8 * 24 * 60 * 60
+        let id = UUID()
+
+        let mac = DataStore(inMemory: true, deviceID: "mac")
+        mac.dataRetention = .oneWeek
+        _ = try mac.shoppingStore.addItem(name: "Milk", tagIDs: [], createdAt: now.addingTimeInterval(-eightDays * 2), now: now.addingTimeInterval(-eightDays * 2))
+        // Force known id by applying snapshot
+        let oldCompleted = ItemSnapshot(
+            id: id,
+            name: "Milk",
+            isCompleted: true,
+            createdAt: now.addingTimeInterval(-eightDays * 2),
+            completedAt: now.addingTimeInterval(-eightDays - 86_400),
+            updatedAt: now.addingTimeInterval(-eightDays - 86_400),
+            deletedAt: nil,
+            sortOrder: 0,
+            tagIDs: [],
+            lastEditorDeviceID: "mac"
+        )
+        try mac.shoppingStore.applyCanonicalSnapshot(
+            SyncSnapshot(generatedAt: now, items: [oldCompleted], tags: [])
+        )
+        mac.fetchData()
+
+        let phoneCompletedAt = now.addingTimeInterval(-60)
+        let phoneSnapshot = SyncSnapshot(
+            generatedAt: now,
+            items: [
+                ItemSnapshot(
+                    id: id,
+                    name: "Milk",
+                    isCompleted: true,
+                    createdAt: now.addingTimeInterval(-eightDays * 2),
+                    completedAt: phoneCompletedAt,
+                    updatedAt: phoneCompletedAt,
+                    deletedAt: nil,
+                    sortOrder: 0,
+                    tagIDs: [],
+                    lastEditorDeviceID: "iphone"
+                )
+            ],
+            tags: []
+        )
+
+        // Bug path: prune first creates a newer tombstone that beats the phone completion.
+        _ = mac.pruneExpiredData(now: now)
+        XCTAssertNotNil(mac.shoppingStore.item(id: id)?.deletedAt)
+
+        let transport = FakeCoordinatorTransport(
+            fetchResults: [.success(RemoteSnapshot(snapshot: phoneSnapshot, etag: "\"v2\""))]
+        )
+        let coordinator = SyncCoordinator(dataStore: mac, transport: transport)
+        await coordinator.syncNow()
+
+        let afterBug = try XCTUnwrap(transport.putSnapshots.first?.items.first)
+        XCTAssertNotNil(afterBug.deletedAt, "Prune-before-sync should upload a tombstone")
+    }
+
+    func testSyncThenPruneKeepsFresherRemoteCompletion() async throws {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let eightDays: TimeInterval = 8 * 24 * 60 * 60
+        let id = UUID()
+
+        let mac = DataStore(inMemory: true, deviceID: "mac")
+        mac.dataRetention = .oneWeek
+        let oldCompleted = ItemSnapshot(
+            id: id,
+            name: "Milk",
+            isCompleted: true,
+            createdAt: now.addingTimeInterval(-eightDays * 2),
+            completedAt: now.addingTimeInterval(-eightDays - 86_400),
+            updatedAt: now.addingTimeInterval(-eightDays - 86_400),
+            deletedAt: nil,
+            sortOrder: 0,
+            tagIDs: [],
+            lastEditorDeviceID: "mac"
+        )
+        try mac.shoppingStore.applyCanonicalSnapshot(
+            SyncSnapshot(generatedAt: now, items: [oldCompleted], tags: [])
+        )
+        mac.fetchData()
+
+        let phoneCompletedAt = now.addingTimeInterval(-60)
+        let phoneSnapshot = SyncSnapshot(
+            generatedAt: now,
+            items: [
+                ItemSnapshot(
+                    id: id,
+                    name: "Milk",
+                    isCompleted: true,
+                    createdAt: now.addingTimeInterval(-eightDays * 2),
+                    completedAt: phoneCompletedAt,
+                    updatedAt: phoneCompletedAt,
+                    deletedAt: nil,
+                    sortOrder: 0,
+                    tagIDs: [],
+                    lastEditorDeviceID: "iphone"
+                )
+            ],
+            tags: []
+        )
+
+        let transport = FakeCoordinatorTransport(
+            fetchResults: [.success(RemoteSnapshot(snapshot: phoneSnapshot, etag: "\"v2\""))]
+        )
+        let coordinator = SyncCoordinator(dataStore: mac, transport: transport)
+        await coordinator.syncNow()
+        _ = mac.pruneExpiredData(now: now)
+
+        let kept = try XCTUnwrap(mac.items.first { $0.id == id })
+        XCTAssertTrue(kept.isCompleted)
+        XCTAssertNil(kept.deletedAt)
+        XCTAssertEqual(mac.archivedItems.map(\.id), [id])
+    }
+
+    func testSyncPreservesItemsWithoutTags() async throws {
+        let phone = DataStore(inMemory: true, deviceID: "iphone")
+        phone.addItem(name: "NoTag Milk")
+        phone.addTag(name: "Food")
+        let food = try XCTUnwrap(phone.tags.first)
+        phone.addItem(name: "Tagged Bread", tags: [food])
+
+        let phoneSnapshot = try phone.shoppingStore.makeSnapshot()
+        XCTAssertEqual(phoneSnapshot.items.filter { $0.tagIDs.isEmpty }.count, 1)
+        XCTAssertEqual(phoneSnapshot.items.count, 2)
+
+        let mac = DataStore(inMemory: true, deviceID: "mac")
+        mac.addItem(name: "Mac Local")
+        let transport = FakeCoordinatorTransport(
+            fetchResults: [.success(RemoteSnapshot(snapshot: phoneSnapshot, etag: "\"v-notag\""))]
+        )
+        let coordinator = SyncCoordinator(dataStore: mac, transport: transport)
+        await coordinator.syncNow()
+
+        XCTAssertEqual(Set(mac.items.map(\.name)), ["NoTag Milk", "Tagged Bread", "Mac Local"])
+        let noTag = try XCTUnwrap(mac.items.first { $0.name == "NoTag Milk" })
+        XCTAssertTrue(noTag.tags.isEmpty)
+        XCTAssertNil(noTag.deletedAt)
+
+        let uploaded = try XCTUnwrap(transport.putSnapshots.first)
+        XCTAssertEqual(uploaded.items.filter { $0.name == "NoTag Milk" }.count, 1)
+        XCTAssertTrue(uploaded.items.first { $0.name == "NoTag Milk" }?.tagIDs.isEmpty == true)
+    }
+
+    func testApplyCanonicalKeepsUntaggedItemAcrossResync() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "mac")
+        let untagged = try store.addItem(name: "Solo", tagIDs: [])
+        let tag = try store.addTag(name: "A", colorHex: "#C53A32")
+        let tagged = try store.addItem(name: "WithTag", tagIDs: [tag.id])
+
+        let snap1 = try store.makeSnapshot()
+        try store.applyCanonicalSnapshot(snap1)
+        XCTAssertEqual(store.items.map(\.id).sorted { $0.uuidString < $1.uuidString },
+                       [untagged.id, tagged.id].sorted { $0.uuidString < $1.uuidString })
+
+        // Remote-looking snapshot that still includes the untagged item with empty tagIDs.
+        let remote = SyncSnapshot(
+            generatedAt: Date(),
+            items: snap1.items,
+            tags: snap1.tags
+        )
+        try store.apply(snapshot: remote)
+        XCTAssertNotNil(store.item(id: untagged.id))
+        XCTAssertTrue(store.item(id: untagged.id)?.tags.isEmpty == true)
+        XCTAssertNil(store.item(id: untagged.id)?.deletedAt)
+    }
+
     func testMissingRemoteCreatesIt() async throws {
         let store = DataStore(inMemory: true, deviceID: "local")
         store.addItem(name: "Local")

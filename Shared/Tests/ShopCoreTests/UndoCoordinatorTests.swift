@@ -12,7 +12,6 @@ final class UndoCoordinatorTests: XCTestCase {
 
         var observerCalls = 0
         let coordinator = UndoCoordinator(
-            duration: 60,
             performMutation: { mutation in
                 try mutation()
                 observerCalls += 1
@@ -36,7 +35,7 @@ final class UndoCoordinatorTests: XCTestCase {
         XCTAssertEqual(store.activeItems.map(\.id), [item.id])
         XCTAssertGreaterThan(restored.updatedAt, completedVersion)
         XCTAssertEqual(observerCalls, 1)
-        XCTAssertNil(coordinator.currentAction)
+        XCTAssertFalse(coordinator.canUndo)
     }
 
     func testUndoRestoringCompletedItemReturnsToArchiveWithLaterVersion() throws {
@@ -49,7 +48,6 @@ final class UndoCoordinatorTests: XCTestCase {
 
         var observerCalls = 0
         let coordinator = UndoCoordinator(
-            duration: 60,
             performMutation: { mutation in
                 try mutation()
                 observerCalls += 1
@@ -83,7 +81,6 @@ final class UndoCoordinatorTests: XCTestCase {
 
         var observerCalls = 0
         let coordinator = UndoCoordinator(
-            duration: 60,
             performMutation: { mutation in
                 try mutation()
                 observerCalls += 1
@@ -117,7 +114,6 @@ final class UndoCoordinatorTests: XCTestCase {
 
         var observerCalls = 0
         let coordinator = UndoCoordinator(
-            duration: 60,
             performMutation: { mutation in
                 try mutation()
                 observerCalls += 1
@@ -150,7 +146,6 @@ final class UndoCoordinatorTests: XCTestCase {
 
         let missingID = UUID()
         let coordinator = UndoCoordinator(
-            duration: 60,
             performMutation: { mutation in
                 try mutation()
             }
@@ -172,47 +167,57 @@ final class UndoCoordinatorTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(store.item(id: item.id)).isCompleted)
     }
 
-    func testPresentReplacesExistingActionAndIgnoresStaleExpiry() async {
-        let scheduler = UndoTestScheduler()
-        let coordinator = UndoCoordinator(sleep: scheduler.sleep)
-        let firstID = UUID()
-        let secondID = UUID()
+    func testStackKeepsMultipleActionsAndUndoesInReverseOrder() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "iphone")
+        let first = try store.addItem(name: "Milk", tagIDs: [], now: .t0)
+        let second = try store.addItem(name: "Bread", tagIDs: [], now: .t0)
 
-        coordinator.present(UndoAction(id: firstID, message: "First") {})
-        let first = await scheduler.waitForNextSleeper()
-        coordinator.present(UndoAction(id: secondID, message: "Second") {})
-        let second = await scheduler.waitForNextSleeper(after: first)
+        let coordinator = UndoCoordinator(
+            performMutation: { mutation in try mutation() }
+        )
 
-        XCTAssertEqual(coordinator.currentAction?.id, secondID)
+        coordinator.present(UndoAction(message: "First") {
+            try store.softDeleteItem(itemID: first.id, now: .t1)
+        })
+        coordinator.present(UndoAction(message: "Second") {
+            try store.softDeleteItem(itemID: second.id, now: .t1)
+        })
 
-        await scheduler.advance(first)
-        await Task.yield()
-        XCTAssertEqual(coordinator.currentAction?.id, secondID)
+        XCTAssertEqual(coordinator.currentAction?.message, "Second")
 
-        await scheduler.advance(second)
-        await waitUntil { coordinator.currentAction == nil }
-        XCTAssertNil(coordinator.currentAction)
+        try coordinator.undo()
+        XCTAssertNotNil(try store.item(id: second.id))
+        XCTAssertEqual(coordinator.currentAction?.message, "First")
+
+        try coordinator.undo()
+        XCTAssertNotNil(try store.item(id: first.id))
+        XCTAssertFalse(coordinator.canUndo)
     }
 
-    func testDismissClearsActionBeforeExpiry() async {
-        let scheduler = UndoTestScheduler()
-        let coordinator = UndoCoordinator(sleep: scheduler.sleep)
-        coordinator.present(UndoAction(message: "Temp") {})
-        let sleeper = await scheduler.waitForNextSleeper()
+    func testStackTrimsOldestActionsWhenExceedingMaxHistory() throws {
+        let coordinator = UndoCoordinator(maxHistoryCount: 2)
+
+        coordinator.present(UndoAction(message: "One") {})
+        coordinator.present(UndoAction(message: "Two") {})
+        coordinator.present(UndoAction(message: "Three") {})
+
+        XCTAssertEqual(coordinator.undoStack.map(\.message), ["Two", "Three"])
+    }
+
+    func testDismissRemovesMostRecentActionWithoutExecuting() throws {
+        let store = try ShoppingStore(inMemory: true, deviceID: "iphone")
+        let item = try store.addItem(name: "Milk", tagIDs: [], now: .t0)
+        try store.setCompleted(itemID: item.id, completed: true, now: .t1)
+
+        let coordinator = UndoCoordinator()
+        coordinator.present(UndoAction(message: "Temp") {
+            try store.setCompleted(itemID: item.id, completed: false, now: .t2)
+        })
 
         coordinator.dismiss()
 
-        XCTAssertNil(coordinator.currentAction)
-        await scheduler.advance(sleeper)
-        await Task.yield()
-        XCTAssertNil(coordinator.currentAction)
-    }
-
-    private func waitUntil(condition: @escaping @MainActor () -> Bool) async {
-        for _ in 0..<1_000 where !condition() {
-            await Task.yield()
-        }
-        XCTAssertTrue(condition())
+        XCTAssertFalse(coordinator.canUndo)
+        XCTAssertTrue(try XCTUnwrap(store.item(id: item.id)).isCompleted)
     }
 }
 
@@ -222,37 +227,4 @@ private extension Date {
     static let t2 = Date(timeIntervalSince1970: 3_000)
     static let t3 = Date(timeIntervalSince1970: 4_000)
     static let t4 = Date(timeIntervalSince1970: 5_000)
-}
-
-private actor UndoTestScheduler {
-    private var continuations: [UUID: CheckedContinuation<Void, Never>] = [:]
-    private var latestRegisteredID: UUID?
-
-    func sleep(_ interval: TimeInterval) async {
-        let id = UUID()
-        await withCheckedContinuation { continuation in
-            continuations[id] = continuation
-            latestRegisteredID = id
-        }
-    }
-
-    var sleeperCount: Int {
-        continuations.count
-    }
-
-    func contains(_ id: UUID) -> Bool {
-        continuations[id] != nil
-    }
-
-    func waitForNextSleeper(after previousID: UUID? = nil) async -> UUID {
-        while latestRegisteredID == previousID
-                || latestRegisteredID.flatMap({ continuations[$0] }) == nil {
-            await Task.yield()
-        }
-        return latestRegisteredID!
-    }
-
-    func advance(_ id: UUID) {
-        continuations.removeValue(forKey: id)?.resume()
-    }
 }

@@ -8,6 +8,7 @@ struct WatchAddItemView: View {
 
     @State private var itemName = ""
     @State private var selectedTagIDs: Set<UUID> = []
+    @State private var createdAt = Date()
     @FocusState private var isFocused: Bool
 
     private var trimmedName: String {
@@ -37,6 +38,14 @@ struct WatchAddItemView: View {
                         tagSelectionSection
                     }
 
+                    DatePicker(
+                        ShopStrings.addedAt,
+                        selection: $createdAt,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .labelsHidden()
+                    .accessibilityLabel(ShopStrings.addedAt)
+
                     Button {
                         addItem()
                     } label: {
@@ -46,7 +55,7 @@ struct WatchAddItemView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .tint(ShopTheme.naturalGreen)
+                    .tint(ShopTheme.brandColor)
                     .disabled(!canAdd)
                     .accessibilityLabel(ShopStrings.addItem)
                 }
@@ -94,7 +103,7 @@ struct WatchAddItemView: View {
                             if selectedTagIDs.contains(tag.id) {
                                 Image(systemName: "checkmark")
                                     .font(.caption2.weight(.bold))
-                                    .foregroundStyle(ShopTheme.naturalGreen)
+                                    .foregroundStyle(ShopTheme.brandColor)
                             }
                         }
                         .frame(minHeight: ShopTheme.minTouchTarget)
@@ -129,7 +138,7 @@ struct WatchAddItemView: View {
     private func addItem() {
         guard canAdd else { return }
         let selectedTags = dataStore.tags.filter { selectedTagIDs.contains($0.id) }
-        dataStore.addItem(name: trimmedName, tags: selectedTags)
+        dataStore.addItem(name: trimmedName, tags: selectedTags, createdAt: createdAt)
         WKInterfaceDevice.current().play(.success)
         dismiss()
     }

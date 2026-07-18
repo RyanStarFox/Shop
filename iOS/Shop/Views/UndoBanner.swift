@@ -21,7 +21,7 @@ struct UndoBanner: View {
                     performUndo()
                 }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(ShopTheme.naturalGreen)
+                .foregroundStyle(ShopTheme.brandColor)
                 .frame(minWidth: ShopTheme.minTouchTarget, minHeight: ShopTheme.minTouchTarget)
                 .accessibilityLabel(ShopStrings.undo)
                 .accessibilityHint(action.message)

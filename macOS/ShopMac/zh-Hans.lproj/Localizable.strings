@@ -20,14 +20,20 @@
 "mac.empty_search_shortcut" = "按 ⌘F 搜索";
 "mac.detail_placeholder" = "选择物品以编辑名称和标签";
 "mac.detail_missing_item" = "该物品已不存在。";
+"mac.draft_placeholder" = "新物品";
 
 /* Tags */
 "tags.title" = "标签";
+"tags.all" = "所有标签";
 "tag.add" = "添加标签";
 "tag.name" = "标签名称";
 "tag.color" = "颜色";
 "tag.manage" = "管理标签";
 "tag.none" = "无标签";
+"tag.rename" = "重命名…";
+"mac.tag_new" = "新建标签…";
+"mac.tag_rename_title" = "重命名标签";
+"mac.tag_delete_confirm" = "删除标签“%@”？物品上的其他标签会保留。";
 
 /* Filter */
 "filter.title" = "筛选";

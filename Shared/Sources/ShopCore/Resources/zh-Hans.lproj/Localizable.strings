@@ -3,6 +3,8 @@
 "undo.item_completed" = "已标记为完成";
 "undo.item_restored" = "已恢复到清单";
 "undo.item_deleted" = "物品已删除";
+"undo.item_edited" = "已撤销物品修改";
+"tag.toggle_hint" = "按空格键切换此标签";
 "undo.tag_deleted" = "标签已删除";
 "undo.batch_items_changed" = "撤销批量更改";
 "undo.batch_items_deleted" = "撤销批量删除";
@@ -93,3 +95,18 @@
 "watch.error.unsupported_version" = "不支持 Apple Watch 同步快照版本 %@。";
 "watch.error.file_read_failed" = "无法读取 Apple Watch 同步文件：%@";
 "watch.error.file_cleanup_failed" = "无法删除 Apple Watch 同步临时文件：%@";
+
+/* App / items used by extensions */
+"app.name" = "Shop !";
+"item.empty" = "还没有物品，点击 + 添加吧！";
+"item.pending_count" = "待买 %d 项";
+"widget.empty" = "暂无待买物品";
+"widget.description" = "查看待买物品，并可直接标记为已购买。";
+"widget.recently_completed" = "最近完成";
+"widget.add_item" = "添加物品";
+"widget.restore_item" = "恢复为待买";
+"widget.filter_all_tags" = "全部标签";
+"widget.match_any" = "任一匹配";
+"widget.match_all" = "全部匹配";
+"widget.filter_empty" = "该筛选下暂无物品";
+"widget.unavailable" = "请先打开一次 Shop!。若仍为空，通常是 App Group 不可用（AltStore 重签较常见）。";
