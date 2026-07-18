@@ -209,3 +209,43 @@ schemes:
       config: Debug
     archive:
       config: Release
+
+  ShopMac:
+    build:
+      targets:
+        ShopMac: all
+        ShopMacWidget: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  ShopWatch:
+    build:
+      targets:
+        ShopWatch: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  ShopWidget:
+    build:
+      targets:
+        ShopWidget: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
