@@ -1,37 +1,70 @@
-# Shop!
+# Shop !
 
-A bilingual (English / 简体中文) shopping list for iPhone, iPad, Apple Watch, and Mac. The UI uses calm system Materials with an optional Liquid Glass treatment on newer OS versions, plus system / light / dark appearance modes.
+Bilingual shopping list for **iPhone**, **Apple Watch**, and **Mac**  
+中英双语购物清单，支持 **iPhone**、**Apple Watch**、**Mac**
 
-## Features
+- English ↓
+- [中文说明](#shop--中文)
 
-- **Multi-platform** – Native SwiftUI targets for iOS, watchOS, and macOS sharing one `ShopCore` package
-- **WatchConnectivity sync** – iPhone ↔ Apple Watch via reachable messages, application context, and file transfers when payloads are large
-- **WebDAV sync** – iPhone / Mac sync through a versioned `shop_sync.json` snapshot, ETag conditional writes, and Keychain-stored passwords (HTTPS by default)
-- **Automatic + manual sync** – Debounced automatic passes after local edits, plus an explicit Sync Now action
-- **Tags** – Color-coded tags with management on iPhone and Mac; Watch can select existing tags when adding items
-- **Inline archive** – Completed items stay in the same scroll view beneath the active list
-- **One-level undo** – Completion, restore, and soft-delete actions present a short-lived undo affordance
-- **Local-first SwiftData** – Persistence is local; cloud sync is WebDAV and WatchConnectivity only (no CloudKit)
+---
 
-## Project Structure
+## Shop ! (English)
 
+A calm, local-first shopping list built with SwiftUI. iPhone, Watch, and Mac share one `ShopCore` package, with optional WebDAV sync and WatchConnectivity.
+
+### Features
+
+- Native SwiftUI apps for iOS, watchOS, and macOS
+- Tags, filters, multi-select / batch actions, inline archive
+- WebDAV sync (`shop_sync.json`) between iPhone and Mac
+- WatchConnectivity sync between iPhone and Apple Watch
+- Home Screen / Desktop widgets (where configured)
+- One-level undo for common edits
+
+### Downloads (GitHub Releases)
+
+Release page: [https://github.com/RyanStarFox/Shop/releases](https://github.com/RyanStarFox/Shop/releases)
+
+| Asset | Platform | Notes |
+|-------|----------|--------|
+| `Shop-*-macOS.dmg` | Mac | Drag `Shop !.app` to Applications |
+| `Shop-*-iOS-withWatch.ipa` | iPhone (+ Watch) | Includes the Watch companion |
+| `Shop-*-iOS-noWatch.ipa` | iPhone only | Smaller install; no Watch app |
+
+#### macOS: “App is damaged” / cannot open
+
+GitHub downloads are often quarantined by macOS. Development-signed builds are also **not notarized**, so Gatekeeper may block them.
+
+After installing from the DMG, run one of:
+
+```bash
+# Recommended: clear quarantine on the installed app
+xattr -cr "/Applications/Shop !.app"
+
+# Or, if needed:
+sudo xattr -rd com.apple.quarantine "/Applications/Shop !.app"
 ```
-Shop!/
-├── Shared/                     # Swift Package – ShopCore (models, store, sync, theme, undo)
-├── iOS/Shop/                   # iPhone / iPad app
-├── watchOS/ShopWatch/          # Apple Watch companion
-├── macOS/ShopMac/              # Mac split-view app
-├── project.yml                 # XcodeGen project spec
-└── README.md
-```
 
-## Requirements
+If the app is still blocked: **System Settings → Privacy & Security → Open Anyway**.
 
-- Xcode 16+ (Xcode 26 tooling works with the current project)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-- macOS 15.0+, iOS 18.0+, watchOS 11.0+
+If you copied the app elsewhere, replace the path accordingly (for example the `.app` inside the DMG mount).
 
-## Generate the Xcode Project
+#### iPhone: how to install
+
+This project is **not** distributed through the App Store in this repository flow.
+
+You can:
+
+1. **Build & install yourself** with Xcode (recommended for daily use on your own devices), or  
+2. Install an **IPA from the GitHub Release** (`withWatch` or `noWatch`) using a tool that supports development IPAs (for example AltStore, Sideloadly, or similar), signed for **your** Apple ID / team.
+
+Notes:
+
+- Release IPAs are typically **development / debugging** exports. They require a valid signing identity and device registration for your team.
+- Prefer **withWatch** if you use Apple Watch with Shop !.
+- Prefer **noWatch** if you only need the iPhone app.
+
+### Build from source
 
 ```bash
 brew install xcodegen
@@ -40,83 +73,109 @@ xcodegen generate
 open Shop.xcodeproj
 ```
 
-## Schemes and Build Commands
-
-| Scheme | Platform | Notes |
-|--------|----------|-------|
-| `Shop` | iOS | Embeds `ShopWatch` |
-| `ShopMac` | macOS | Three-column split view |
-| `ShopWatch` | watchOS | Companion UI |
-
-Unsigned local builds:
-
-```bash
-xcodebuild -scheme Shop -destination 'platform=iOS Simulator,name=iPhone 17' \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-
-xcodebuild -scheme ShopMac -destination 'platform=macOS' \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-
-xcodebuild -scheme ShopWatch -destination 'generic/platform=watchOS' \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-```
-
-Shared package tests:
+| Scheme | Platform |
+|--------|----------|
+| `Shop` | iPhone (embeds Watch + widget when configured) |
+| `ShopMac` | Mac |
+| `ShopWatch` | Watch only |
 
 ```bash
 cd Shared && swift test
 ```
 
-## Sync Setup
+Requirements: Xcode 16+, macOS 15+, iOS 18+, watchOS 11+.
 
-### iPhone ↔ Apple Watch
+### WebDAV
 
-Uses WatchConnectivity. Delivery is best when the companion is reachable; application context and queued file transfers provide eventual consistency when devices reconnect. Bluetooth / proximity matter more than “same Wi‑Fi” alone.
+**Settings → WebDAV**: HTTPS server, username, password (Keychain). Remote file: `shop_sync.json`.
 
-### iPhone / Mac ↔ WebDAV
+### License
 
-1. Open **Settings → WebDAV**
-2. Enter an HTTPS server URL (HTTP only if explicitly allowed in advanced configuration)
-3. Enter username and password — the password is stored in Keychain, not UserDefaults
-4. Use **Sync Now**, or rely on automatic debounced sync after edits
+MIT
 
-Typical endpoints include Nextcloud, ownCloud, and Synology WebDAV folders. The remote document is `shop_sync.json`. Shop apps configure HTTPS-only WebDAV by default.
+---
 
-## Architecture
+## Shop ! (中文)
 
+本地优先的购物清单，SwiftUI 原生支持 iPhone / Apple Watch / Mac，可选 WebDAV 与手表同步。
+
+### 功能概览
+
+- iOS / watchOS / macOS 原生界面，共享 `ShopCore`
+- 标签、筛选、多选批量、归档区
+- iPhone ↔ Mac：WebDAV（`shop_sync.json`）
+- iPhone ↔ Apple Watch：WatchConnectivity
+- 小组件（按平台配置）
+- 常见操作支持一级撤销
+
+### 下载（GitHub Releases）
+
+发布页：[https://github.com/RyanStarFox/Shop/releases](https://github.com/RyanStarFox/Shop/releases)
+
+| 文件 | 平台 | 说明 |
+|------|------|------|
+| `Shop-*-macOS.dmg` | Mac | 将 `Shop !.app` 拖入「应用程序」 |
+| `Shop-*-iOS-withWatch.ipa` | iPhone（含 Watch） | 带手表 companion |
+| `Shop-*-iOS-noWatch.ipa` | 仅 iPhone | 不含手表应用 |
+
+#### Mac：提示「已损坏」或无法打开
+
+从 GitHub 下载的文件常被系统加上隔离属性（quarantine）；当前 DMG 多为 **开发证书签名且未公证**，容易被拦截。
+
+安装后可在终端执行：
+
+```bash
+# 推荐：清除应用程序上的隔离属性
+xattr -cr "/Applications/Shop !.app"
+
+# 如有需要也可：
+sudo xattr -rd com.apple.quarantine "/Applications/Shop !.app"
 ```
-SwiftData (ModelContainer)
-  └── ShoppingStore / DataStore
-       ├── SnapshotMerger (last-write-wins + tombstones + device-ID tie-break)
-       ├── SyncCoordinator (debounce, single-flight, 412 retries)
-       ├── WatchConnectivityTransport (iPhone ↔ Watch)
-       └── WebDAVTransport + KeychainStore (iPhone / Mac ↔ server)
+
+若仍无法打开：打开 **系统设置 → 隐私与安全性 → 仍要打开**。
+
+若 App 不在「应用程序」目录，请把路径改成实际 `.app` 位置。
+
+#### iPhone：如何安装
+
+本仓库发布流程 **不走 App Store**。
+
+你可以：
+
+1. **用 Xcode 自行编译安装**到自己的 iPhone（日常自用推荐），或  
+2. 下载 Release 里的 **IPA**（`withWatch` / `noWatch`），用支持开发版 IPA 的工具（如 AltStore、Sideloadly 等）安装，并使用 **你自己的** Apple ID / 开发者团队签名。
+
+说明：
+
+- Release 中的 IPA 一般为 **development / debugging** 导出，需要有效签名与设备注册。
+- 需要手表同步请选 **withWatch**。
+- 只要手机请选 **noWatch**。
+
+### 从源码构建
+
+```bash
+brew install xcodegen
+cd "Shop!"
+xcodegen generate
+open Shop.xcodeproj
 ```
 
-## Localization
+| Scheme | 平台 |
+|--------|------|
+| `Shop` | iPhone（按配置嵌入 Watch / 小组件） |
+| `ShopMac` | Mac |
+| `ShopWatch` | 仅 Watch |
 
-User-facing strings live in:
+```bash
+cd Shared && swift test
+```
 
-- `Shared/Sources/ShopCore/Resources/{en,zh-Hans}.lproj` (ShopCore)
-- Platform `Localizable.strings` for target-specific copy
+环境：Xcode 16+，macOS 15+，iOS 18+，watchOS 11+。
 
-Access shared strings through `ShopStrings`.
+### WebDAV
 
-## Verification Status
+**设置 → WebDAV**：HTTPS 地址、用户名、密码（存 Keychain）。远端文件为 `shop_sync.json`。
 
-Automated gates on this branch:
-
-- `cd Shared && swift test` — 91 tests passed
-- Unsigned builds for `Shop`, `ShopMac`, and `ShopWatch` succeeded
-- Static checks: no whitespace errors; no hardcoded English `Text`/`TextField` labels in platform Swift; WebDAV passwords use Keychain (legacy UserDefaults key only removed during migration)
-
-Still requiring human / hardware validation (not claimed passing):
-
-- Simulator pass for light/dark/system appearance, largest Dynamic Type, VoiceOver, Reduce Motion, and small/large Watch layouts
-- Disposable WebDAV scenarios (first upload, merge, offline concurrent edit, 412 retry, bad credentials, timeout recovery)
-- Paired iPhone ↔ Apple Watch add/complete/restore, offline delivery, reconnect, and idempotency
-- Optional follow-up: physical tombstone purge after successful sync past retention (snapshots currently retain soft-deleted records)
-
-## License
+### 许可证
 
 MIT
