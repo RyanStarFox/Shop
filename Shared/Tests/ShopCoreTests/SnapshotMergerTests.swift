@@ -68,6 +68,78 @@ final class SnapshotMergerTests: XCTestCase {
         XCTAssertEqual(result.items.first?.tagIDs, [liveTagID])
     }
 
+    func testMergeKeepsNewerTagMembershipWhenOlderCopyWinsOnCompletion() {
+        let tagID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+
+        // Phone tagged the item earlier; Mac later completed an untagged stale copy.
+        let phoneTagged = item(
+            id: itemID,
+            name: "Milk",
+            updatedAt: t1,
+            isCompleted: false,
+            tagIDs: [tagID],
+            tagMembershipUpdatedAt: t1,
+            deviceID: "iphone"
+        )
+        let macCompleted = item(
+            id: itemID,
+            name: "Milk",
+            updatedAt: t2,
+            isCompleted: true,
+            tagIDs: [],
+            tagMembershipUpdatedAt: t0,
+            deviceID: "mac"
+        )
+
+        let result = SnapshotMerger().merge(
+            local: snapshot(
+                items: [macCompleted],
+                tags: [tag(id: tagID, name: "Food", updatedAt: t1)]
+            ),
+            remote: snapshot(
+                items: [phoneTagged],
+                tags: [tag(id: tagID, name: "Food", updatedAt: t1)]
+            )
+        )
+
+        XCTAssertEqual(result.items.first?.isCompleted, true)
+        XCTAssertEqual(result.items.first?.updatedAt, t2)
+        XCTAssertEqual(result.items.first?.tagIDs, [tagID])
+        XCTAssertEqual(result.items.first?.tagMembershipUpdatedAt, t1)
+    }
+
+    func testMergePrefersNewerTagRemovalOverStaleTaggedCopy() {
+        let tagID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+
+        let stillTagged = item(
+            id: itemID,
+            name: "Milk",
+            updatedAt: t2,
+            tagIDs: [tagID],
+            tagMembershipUpdatedAt: t0,
+            deviceID: "iphone"
+        )
+        let tagsRemoved = item(
+            id: itemID,
+            name: "Milk",
+            updatedAt: t1,
+            tagIDs: [],
+            tagMembershipUpdatedAt: t1,
+            deviceID: "mac"
+        )
+
+        let result = SnapshotMerger().merge(
+            local: snapshot(items: [stillTagged], tags: [tag(id: tagID, name: "Food", updatedAt: t0)]),
+            remote: snapshot(items: [tagsRemoved], tags: [tag(id: tagID, name: "Food", updatedAt: t0)])
+        )
+
+        XCTAssertEqual(result.items.first?.tagIDs, [])
+        XCTAssertEqual(result.items.first?.tagMembershipUpdatedAt, t1)
+        XCTAssertEqual(result.items.first?.updatedAt, t2)
+    }
+
     func testMergeIsIdempotentAndIndependentOfArrayInputOrder() {
         let firstID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
         let secondID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
@@ -120,11 +192,63 @@ final class SnapshotMergerTests: XCTestCase {
 
         XCTAssertEqual(snapshot.version, 1)
         XCTAssertEqual(snapshot.items.first?.updatedAt, t0)
+        XCTAssertEqual(snapshot.items.first?.tagMembershipUpdatedAt, t0)
         XCTAssertNil(snapshot.items.first?.deletedAt)
         XCTAssertEqual(snapshot.items.first?.lastEditorDeviceID, "legacy")
         XCTAssertEqual(snapshot.tags.first?.updatedAt, t0)
         XCTAssertNil(snapshot.tags.first?.deletedAt)
         XCTAssertEqual(snapshot.tags.first?.lastEditorDeviceID, "legacy")
+    }
+
+    func testLegacySnapshotDoesNotTreatScalarUpdatedAtAsTagMembership() throws {
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let tagID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let json = """
+        {
+          "version": 2,
+          "generatedAt": 3000,
+          "items": [{
+            "id": "\(itemID.uuidString)",
+            "name": "Milk",
+            "isCompleted": true,
+            "createdAt": 1000,
+            "completedAt": 3000,
+            "updatedAt": 3000,
+            "sortOrder": 0,
+            "tagIDs": [],
+            "lastEditorDeviceID": "mac"
+          }],
+          "tags": []
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let legacyCompleted = try decoder.decode(SyncSnapshot.self, from: json)
+        XCTAssertEqual(legacyCompleted.items.first?.tagMembershipUpdatedAt, t0)
+
+        let result = SnapshotMerger().merge(
+            local: snapshot(
+                items: [item(
+                    id: itemID,
+                    name: "Milk",
+                    updatedAt: t1,
+                    tagIDs: [tagID],
+                    tagMembershipUpdatedAt: t1,
+                    deviceID: "iphone"
+                )],
+                tags: [tag(id: tagID, name: "Food", updatedAt: t0)]
+            ),
+            remote: SyncSnapshot(
+                version: 2,
+                generatedAt: t2,
+                items: legacyCompleted.items,
+                tags: [tag(id: tagID, name: "Food", updatedAt: t0)]
+            )
+        )
+
+        XCTAssertEqual(result.items.first?.isCompleted, true)
+        XCTAssertEqual(result.items.first?.tagIDs, [tagID])
+        XCTAssertEqual(result.items.first?.tagMembershipUpdatedAt, t1)
     }
 
     func testStoreAppliesSnapshotByUpsertingCanonicalModelsAndExportsTombstones() throws {
@@ -157,6 +281,43 @@ final class SnapshotMergerTests: XCTestCase {
         XCTAssertEqual(exported.items.first?.tagIDs, [])
     }
 
+    func testStoreCompletionDoesNotClobberRemoteTagMembershipOnSync() throws {
+        let tagID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let itemID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let store = try ShoppingStore(inMemory: true, deviceID: "mac")
+
+        try store.apply(snapshot: snapshot(
+            items: [item(
+                id: itemID,
+                name: "Milk",
+                updatedAt: t0,
+                tagIDs: [],
+                tagMembershipUpdatedAt: t0,
+                deviceID: "mac"
+            )],
+            tags: [tag(id: tagID, name: "Food", updatedAt: t0)]
+        ))
+        try store.setCompleted(itemID: itemID, completed: true, now: t2)
+        XCTAssertTrue(store.item(id: itemID)?.tags.isEmpty ?? false)
+
+        // Phone tagged an older revision that never saw Mac's completion yet.
+        try store.apply(snapshot: snapshot(
+            items: [item(
+                id: itemID,
+                name: "Milk",
+                updatedAt: t1,
+                tagIDs: [tagID],
+                tagMembershipUpdatedAt: t1,
+                deviceID: "iphone"
+            )],
+            tags: [tag(id: tagID, name: "Food", updatedAt: t1)]
+        ))
+
+        XCTAssertEqual(store.item(id: itemID)?.isCompleted, true)
+        XCTAssertEqual(store.item(id: itemID)?.tags.map(\.id), [tagID])
+        XCTAssertEqual(store.item(id: itemID)?.tagMembershipUpdatedAt, t1)
+    }
+
     private func snapshot(
         items: [ItemSnapshot] = [],
         tags: [TagSnapshot] = []
@@ -169,19 +330,22 @@ final class SnapshotMergerTests: XCTestCase {
         name: String,
         updatedAt: Date,
         deletedAt: Date? = nil,
+        isCompleted: Bool = false,
         tagIDs: [UUID] = [],
+        tagMembershipUpdatedAt: Date? = nil,
         deviceID: String = "iphone"
     ) -> ItemSnapshot {
         ItemSnapshot(
             id: id,
             name: name,
-            isCompleted: false,
+            isCompleted: isCompleted,
             createdAt: t0,
-            completedAt: nil,
+            completedAt: isCompleted ? updatedAt : nil,
             updatedAt: updatedAt,
             deletedAt: deletedAt,
             sortOrder: 0,
             tagIDs: tagIDs,
+            tagMembershipUpdatedAt: tagMembershipUpdatedAt ?? updatedAt,
             lastEditorDeviceID: deviceID
         )
     }

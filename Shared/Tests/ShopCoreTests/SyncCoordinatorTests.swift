@@ -165,7 +165,7 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertNil(try XCTUnwrap(transport.putSnapshots.first).items.first?.deletedAt)
     }
 
-    func testPruneBeforeSyncCanLoseFresherRemoteCompletion() async throws {
+    func testPruneBeforeSyncDoesNotBeatFresherRemoteCompletion() async throws {
         let now = Date(timeIntervalSince1970: 2_000_000)
         let eightDays: TimeInterval = 8 * 24 * 60 * 60
         let id = UUID()
@@ -173,7 +173,6 @@ final class SyncCoordinatorTests: XCTestCase {
         let mac = DataStore(inMemory: true, deviceID: "mac")
         mac.dataRetention = .oneWeek
         _ = try mac.shoppingStore.addItem(name: "Milk", tagIDs: [], createdAt: now.addingTimeInterval(-eightDays * 2), now: now.addingTimeInterval(-eightDays * 2))
-        // Force known id by applying snapshot
         let oldCompleted = ItemSnapshot(
             id: id,
             name: "Milk",
@@ -211,18 +210,22 @@ final class SyncCoordinatorTests: XCTestCase {
             tags: []
         )
 
-        // Bug path: prune first creates a newer tombstone that beats the phone completion.
+        // Even if prune runs before sync, soft-delete must not outrank a fresher remote completion.
         _ = mac.pruneExpiredData(now: now)
         XCTAssertNotNil(mac.shoppingStore.item(id: id)?.deletedAt)
 
         let transport = FakeCoordinatorTransport(
             fetchResults: [.success(RemoteSnapshot(snapshot: phoneSnapshot, etag: "\"v2\""))]
         )
-        let coordinator = SyncCoordinator(dataStore: mac, transport: transport)
+        let coordinator = SyncCoordinator(dataStore: mac, transport: transport, now: { now })
         await coordinator.syncNow()
 
-        let afterBug = try XCTUnwrap(transport.putSnapshots.first?.items.first)
-        XCTAssertNotNil(afterBug.deletedAt, "Prune-before-sync should upload a tombstone")
+        let uploaded = try XCTUnwrap(
+            transport.putSnapshots.first?.items.first { $0.id == id }
+        )
+        XCTAssertNil(uploaded.deletedAt)
+        XCTAssertEqual(uploaded.completedAt, phoneCompletedAt)
+        XCTAssertNil(mac.shoppingStore.item(id: id)?.deletedAt)
     }
 
     func testSyncThenPruneKeepsFresherRemoteCompletion() async throws {
@@ -272,7 +275,7 @@ final class SyncCoordinatorTests: XCTestCase {
         let transport = FakeCoordinatorTransport(
             fetchResults: [.success(RemoteSnapshot(snapshot: phoneSnapshot, etag: "\"v2\""))]
         )
-        let coordinator = SyncCoordinator(dataStore: mac, transport: transport)
+        let coordinator = SyncCoordinator(dataStore: mac, transport: transport, now: { now })
         await coordinator.syncNow()
         _ = mac.pruneExpiredData(now: now)
 
@@ -332,6 +335,40 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertNotNil(store.item(id: untagged.id))
         XCTAssertTrue(store.item(id: untagged.id)?.tags.isEmpty == true)
         XCTAssertNil(store.item(id: untagged.id)?.deletedAt)
+    }
+
+    func testApplyRemoteSnapshotNotifiesMutationObserversWhenContentChanges() throws {
+        let store = DataStore(inMemory: true, deviceID: "iphone")
+        var notifications = 0
+        _ = store.addLocalMutationObserver { notifications += 1 }
+
+        let itemID = UUID()
+        let remote = SyncSnapshot(
+            generatedAt: Date(timeIntervalSince1970: 2_000),
+            items: [
+                ItemSnapshot(
+                    id: itemID,
+                    name: "From Watch",
+                    isCompleted: false,
+                    createdAt: Date(timeIntervalSince1970: 1_000),
+                    completedAt: nil,
+                    updatedAt: Date(timeIntervalSince1970: 2_000),
+                    deletedAt: nil,
+                    sortOrder: 0,
+                    tagIDs: [],
+                    lastEditorDeviceID: "watch"
+                )
+            ],
+            tags: []
+        )
+
+        store.applyRemoteSnapshot(remote)
+        XCTAssertEqual(notifications, 1)
+        XCTAssertEqual(store.items.map(\.name), ["From Watch"])
+
+        // Identical re-apply should not notify again.
+        store.applyRemoteSnapshot(remote)
+        XCTAssertEqual(notifications, 1)
     }
 
     func testMissingRemoteCreatesIt() async throws {

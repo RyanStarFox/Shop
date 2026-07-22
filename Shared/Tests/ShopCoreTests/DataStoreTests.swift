@@ -215,7 +215,7 @@ final class DataStoreTests: XCTestCase {
         XCTAssertEqual(snapshot.items.first?.name, "Milk")
     }
 
-    func testLocalMutationNotifiesAllObserversButRemoteImportDoesNotEcho() throws {
+    func testLocalMutationAndRemoteImportBothNotifyObservers() throws {
         var firstObserverCalls = 0
         var secondObserverCalls = 0
         dataStore.addLocalMutationObserver { firstObserverCalls += 1 }
@@ -229,8 +229,9 @@ final class DataStoreTests: XCTestCase {
             deviceID: "watch"
         )))
 
-        XCTAssertEqual(firstObserverCalls, 1)
-        XCTAssertEqual(secondObserverCalls, 1)
+        // Local edit + Watch/import apply both schedule WebDAV upload.
+        XCTAssertEqual(firstObserverCalls, 2)
+        XCTAssertEqual(secondObserverCalls, 2)
     }
 
     func testRemovedLocalMutationObserverIsNotCalled() {

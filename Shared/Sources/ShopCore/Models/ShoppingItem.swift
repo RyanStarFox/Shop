@@ -10,6 +10,8 @@ public final class ShoppingItem: Identifiable, Hashable {
     public var completedAt: Date?
     public var sortOrder: Int
     public var updatedAt: Date = Date(timeIntervalSince1970: 0)
+    /// Advances when tag membership changes; independent from scalar `updatedAt`.
+    public var tagMembershipUpdatedAt: Date = Date(timeIntervalSince1970: 0)
     public var deletedAt: Date? = nil
     public var lastEditorDeviceID: String = ""
     public var recordSchemaVersion: Int = 0
@@ -23,9 +25,10 @@ public final class ShoppingItem: Identifiable, Hashable {
         completedAt: Date? = nil,
         sortOrder: Int = 0,
         updatedAt: Date? = nil,
+        tagMembershipUpdatedAt: Date? = nil,
         deletedAt: Date? = nil,
         lastEditorDeviceID: String = "",
-        recordSchemaVersion: Int = 2,
+        recordSchemaVersion: Int = 3,
         tags: [Tag] = []
     ) {
         self.id = id
@@ -34,7 +37,9 @@ public final class ShoppingItem: Identifiable, Hashable {
         self.createdAt = createdAt
         self.completedAt = completedAt
         self.sortOrder = sortOrder
-        self.updatedAt = updatedAt ?? createdAt
+        let stamp = updatedAt ?? createdAt
+        self.updatedAt = stamp
+        self.tagMembershipUpdatedAt = tagMembershipUpdatedAt ?? stamp
         self.deletedAt = deletedAt
         self.lastEditorDeviceID = lastEditorDeviceID
         self.recordSchemaVersion = recordSchemaVersion

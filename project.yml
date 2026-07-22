@@ -39,6 +39,7 @@ targets:
     sources:
       - path: iOS/Shop
         type: group
+      - path: Resources/AppIcon.icon
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ryanstarfox.shop
@@ -80,6 +81,7 @@ targets:
     sources:
       - path: watchOS/ShopWatch
         type: group
+      - path: Resources/AppIcon.icon
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ryanstarfox.shop.watch
@@ -104,6 +106,7 @@ targets:
     sources:
       - path: macOS/ShopMac
         type: group
+      - path: Resources/AppIcon.icon
     settings:
       base:
         PRODUCT_NAME: "Shop !"

@@ -18,6 +18,7 @@ public struct SnapshotMerger: Sendable {
                 sortOrder: item.sortOrder,
                 tagIDs: Array(Set(item.tagIDs.filter { availableTagIDs.contains($0) }))
                     .sorted { $0.uuidString < $1.uuidString },
+                tagMembershipUpdatedAt: item.tagMembershipUpdatedAt,
                 lastEditorDeviceID: item.lastEditorDeviceID
             )
         }
@@ -61,12 +62,41 @@ public struct SnapshotMerger: Sendable {
     }
 
     private func winner(between lhs: ItemSnapshot, and rhs: ItemSnapshot) -> ItemSnapshot {
+        let scalar = scalarWinner(between: lhs, and: rhs)
+        let membership = tagMembershipWinner(between: lhs, and: rhs)
+        return ItemSnapshot(
+            id: scalar.id,
+            name: scalar.name,
+            isCompleted: scalar.isCompleted,
+            createdAt: scalar.createdAt,
+            completedAt: scalar.completedAt,
+            updatedAt: scalar.updatedAt,
+            deletedAt: scalar.deletedAt,
+            sortOrder: scalar.sortOrder,
+            tagIDs: membership.tagIDs,
+            tagMembershipUpdatedAt: membership.tagMembershipUpdatedAt,
+            lastEditorDeviceID: scalar.lastEditorDeviceID
+        )
+    }
+
+    private func scalarWinner(between lhs: ItemSnapshot, and rhs: ItemSnapshot) -> ItemSnapshot {
         let lhsVersion = (lhs.updatedAt, lhs.lastEditorDeviceID)
         let rhsVersion = (rhs.updatedAt, rhs.lastEditorDeviceID)
         if lhsVersion != rhsVersion {
             return lhsVersion > rhsVersion ? lhs : rhs
         }
         return itemFingerprint(lhs) >= itemFingerprint(rhs) ? lhs : rhs
+    }
+
+    private func tagMembershipWinner(between lhs: ItemSnapshot, and rhs: ItemSnapshot) -> ItemSnapshot {
+        if lhs.tagMembershipUpdatedAt != rhs.tagMembershipUpdatedAt {
+            return lhs.tagMembershipUpdatedAt > rhs.tagMembershipUpdatedAt ? lhs : rhs
+        }
+        // Equal membership time: compare tag sets only. Do not use lastEditorDeviceID —
+        // that field is also advanced by scalar edits (complete/reorder).
+        let lhsTags = lhs.tagIDs.map(\.uuidString).sorted().joined(separator: ",")
+        let rhsTags = rhs.tagIDs.map(\.uuidString).sorted().joined(separator: ",")
+        return lhsTags >= rhsTags ? lhs : rhs
     }
 
     private func winner(between lhs: TagSnapshot, and rhs: TagSnapshot) -> TagSnapshot {
@@ -87,7 +117,8 @@ public struct SnapshotMerger: Sendable {
             item.completedAt?.timeIntervalSinceReferenceDate.description ?? "",
             item.deletedAt?.timeIntervalSinceReferenceDate.description ?? "",
             item.sortOrder.description,
-            item.tagIDs.map(\.uuidString).sorted().joined(separator: ",")
+            item.tagIDs.map(\.uuidString).sorted().joined(separator: ","),
+            item.tagMembershipUpdatedAt.timeIntervalSinceReferenceDate.description
         ].joined(separator: "\u{1F}")
     }
 

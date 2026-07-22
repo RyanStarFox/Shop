@@ -190,7 +190,8 @@ final class ShoppingStoreTests: XCTestCase {
         XCTAssertEqual(item.updatedAt, creationDate)
         XCTAssertNil(item.deletedAt)
         XCTAssertEqual(item.lastEditorDeviceID, "")
-        XCTAssertEqual(item.recordSchemaVersion, 2)
+        XCTAssertEqual(item.recordSchemaVersion, 3)
+        XCTAssertEqual(item.tagMembershipUpdatedAt, creationDate)
         XCTAssertEqual(tag.updatedAt, creationDate)
         XCTAssertNil(tag.deletedAt)
         XCTAssertEqual(tag.lastEditorDeviceID, "")
@@ -230,19 +231,21 @@ final class ShoppingStoreTests: XCTestCase {
                 store.item(id: legacyItemID)?.lastEditorDeviceID,
                 "migration-device"
             )
-            XCTAssertEqual(store.item(id: legacyItemID)?.recordSchemaVersion, 2)
+            XCTAssertEqual(store.item(id: legacyItemID)?.recordSchemaVersion, 3)
+            XCTAssertEqual(store.item(id: legacyItemID)?.tagMembershipUpdatedAt, epoch)
             XCTAssertEqual(store.tag(id: legacyTagID)?.updatedAt, epoch)
             XCTAssertEqual(
                 store.tag(id: legacyTagID)?.lastEditorDeviceID,
                 "migration-device"
             )
-            XCTAssertEqual(store.tag(id: legacyTagID)?.recordSchemaVersion, 2)
+            XCTAssertEqual(store.tag(id: legacyTagID)?.recordSchemaVersion, 3)
             XCTAssertEqual(store.item(id: currentItemID)?.updatedAt, epoch)
             XCTAssertEqual(store.item(id: currentItemID)?.lastEditorDeviceID, "original")
-            XCTAssertEqual(store.item(id: currentItemID)?.recordSchemaVersion, 2)
+            XCTAssertEqual(store.item(id: currentItemID)?.recordSchemaVersion, 3)
+            XCTAssertEqual(store.item(id: currentItemID)?.tagMembershipUpdatedAt, epoch)
             XCTAssertEqual(store.tag(id: currentTagID)?.updatedAt, epoch)
             XCTAssertEqual(store.tag(id: currentTagID)?.lastEditorDeviceID, "original")
-            XCTAssertEqual(store.tag(id: currentTagID)?.recordSchemaVersion, 2)
+            XCTAssertEqual(store.tag(id: currentTagID)?.recordSchemaVersion, 3)
         }
 
         let reopened = try ShoppingStore(
@@ -254,19 +257,19 @@ final class ShoppingStoreTests: XCTestCase {
             reopened.item(id: legacyItemID)?.lastEditorDeviceID,
             "migration-device"
         )
-        XCTAssertEqual(reopened.item(id: legacyItemID)?.recordSchemaVersion, 2)
+        XCTAssertEqual(reopened.item(id: legacyItemID)?.recordSchemaVersion, 3)
         XCTAssertEqual(reopened.tag(id: legacyTagID)?.updatedAt, epoch)
         XCTAssertEqual(
             reopened.tag(id: legacyTagID)?.lastEditorDeviceID,
             "migration-device"
         )
-        XCTAssertEqual(reopened.tag(id: legacyTagID)?.recordSchemaVersion, 2)
+        XCTAssertEqual(reopened.tag(id: legacyTagID)?.recordSchemaVersion, 3)
         XCTAssertEqual(reopened.item(id: currentItemID)?.updatedAt, epoch)
         XCTAssertEqual(reopened.item(id: currentItemID)?.lastEditorDeviceID, "original")
-        XCTAssertEqual(reopened.item(id: currentItemID)?.recordSchemaVersion, 2)
+        XCTAssertEqual(reopened.item(id: currentItemID)?.recordSchemaVersion, 3)
         XCTAssertEqual(reopened.tag(id: currentTagID)?.updatedAt, epoch)
         XCTAssertEqual(reopened.tag(id: currentTagID)?.lastEditorDeviceID, "original")
-        XCTAssertEqual(reopened.tag(id: currentTagID)?.recordSchemaVersion, 2)
+        XCTAssertEqual(reopened.tag(id: currentTagID)?.recordSchemaVersion, 3)
     }
 
     func testShoppingStoreErrorsUseLocalizedFormattingEntryPoints() {

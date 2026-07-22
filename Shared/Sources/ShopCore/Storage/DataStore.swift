@@ -85,7 +85,8 @@ public final class DataStore: ObservableObject {
         modelContext = shoppingStore.modelContext
         fetchData()
         restoreListPreferences()
-        pruneExpiredData()
+        // Do not prune on launch — soft-deletes can race ahead of WebDAV pull.
+        // App lifecycle and SyncCoordinator prune after a successful sync instead.
     }
 
     public func fetchData() {
@@ -97,7 +98,10 @@ public final class DataStore: ObservableObject {
 
     /// Soft-deletes expired completed items and physically purges aged tombstones.
     @discardableResult
-    public func pruneExpiredData(now: Date = Date()) -> DataPruneResult {
+    public func pruneExpiredData(
+        now: Date = Date(),
+        notifyObservers: Bool = true
+    ) -> DataPruneResult {
         do {
             let result = try shoppingStore.pruneExpiredData(
                 retention: dataRetention,
@@ -105,7 +109,7 @@ public final class DataStore: ObservableObject {
             )
             if result.didChange {
                 lastError = nil
-                if result.softDeletedItemCount > 0 {
+                if notifyObservers, result.softDeletedItemCount > 0 {
                     localMutationObservers.values.forEach { $0() }
                 }
                 fetchData()
@@ -485,6 +489,7 @@ public final class DataStore: ObservableObject {
     }
 
     public func applyRemoteSnapshot(_ snapshot: SyncSnapshot) {
+        let before = try? shoppingStore.makeSnapshot()
         do {
             try shoppingStore.apply(snapshot: snapshot)
             lastError = nil
@@ -495,6 +500,12 @@ public final class DataStore: ObservableObject {
         }
         fetchData()
         publishWidgetSnapshot()
+        let after = try? shoppingStore.makeSnapshot()
+        // Ignore generatedAt — makeSnapshot always stamps "now".
+        if before?.items != after?.items || before?.tags != after?.tags {
+            // Watch / import changes should schedule WebDAV upload like local edits.
+            localMutationObservers.values.forEach { $0() }
+        }
     }
 
     @discardableResult

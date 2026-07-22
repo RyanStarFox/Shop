@@ -135,10 +135,21 @@ public final class SyncCoordinator: ObservableObject {
         do {
             for attempt in 0..<3 {
                 let remote = try await transport.fetch()
-                let snapshot = try mergedSnapshot(with: remote)
+                _ = try mergedSnapshot(with: remote)
+                // Capture bytes as late as possible so Watch writes on MainActor
+                // before this line are included; concurrent writes during `put`
+                // set needsAnotherPass via mutation observers.
+                let snapshot = try dataStore.shoppingStore.makeSnapshot(now: now())
                 let precondition = try precondition(for: remote)
                 do {
                     _ = try await transport.put(snapshot, precondition: precondition)
+                    // Soft-delete expired archives only after a successful pull/merge/put.
+                    // Don't notify observers here — that would debounce-schedule a third sync;
+                    // request another pass directly when tombstones were created.
+                    let pruneResult = dataStore.pruneExpiredData(now: now(), notifyObservers: false)
+                    if pruneResult.softDeletedItemCount > 0 {
+                        needsAnotherPass = true
+                    }
                     status = .idle(lastSuccess: now())
                     return
                 } catch WebDAVError.preconditionFailed where attempt < 2 {

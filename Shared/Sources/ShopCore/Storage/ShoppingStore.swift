@@ -26,7 +26,7 @@ public enum ShoppingStoreError: Error, Equatable, LocalizedError {
 
 @MainActor
 public final class ShoppingStore {
-    private static let currentRecordSchemaVersion = 2
+    private static let currentRecordSchemaVersion = 3
 
     public let modelContainer: ModelContainer
     public let modelContext: ModelContext
@@ -129,6 +129,7 @@ public final class ShoppingStore {
             createdAt: stamp,
             sortOrder: nextOrder,
             updatedAt: now,
+            tagMembershipUpdatedAt: selectedTags.isEmpty ? stamp : now,
             lastEditorDeviceID: deviceID,
             tags: selectedTags
         )
@@ -163,6 +164,7 @@ public final class ShoppingStore {
         item.isCompleted = isCompleted
         item.completedAt = completedAt
         advanceVersion(of: item, now: now)
+        advanceTagMembership(of: item, now: now)
         try save()
     }
 
@@ -184,6 +186,7 @@ public final class ShoppingStore {
         let previousCreatedAt = item.createdAt
         let previousCompletedAt = item.completedAt
         let previousUpdatedAt = item.updatedAt
+        let previousTagMembershipUpdatedAt = item.tagMembershipUpdatedAt
         let previousDeviceID = item.lastEditorDeviceID
 
         if let name {
@@ -202,6 +205,9 @@ public final class ShoppingStore {
             }
         }
         advanceVersion(of: item, now: now)
+        if selectedTags != nil {
+            advanceTagMembership(of: item, now: now)
+        }
 
         do {
             try save()
@@ -211,6 +217,7 @@ public final class ShoppingStore {
             item.createdAt = previousCreatedAt
             item.completedAt = previousCompletedAt
             item.updatedAt = previousUpdatedAt
+            item.tagMembershipUpdatedAt = previousTagMembershipUpdatedAt
             item.lastEditorDeviceID = previousDeviceID
             modelContext.rollback()
             throw error
@@ -336,22 +343,24 @@ public final class ShoppingStore {
     public func addTag(tagID: UUID, toItemIDs: [UUID], now: Date = Date()) throws -> [UUID] {
         let tag = try activeTags(ids: [tagID])[0]
         var changed: [UUID] = []
-        var snapshots: [(ShoppingItem, [Tag], Date, String)] = []
+        var snapshots: [(ShoppingItem, [Tag], Date, Date, String)] = []
         for id in toItemIDs {
             guard let item = item(id: id), item.deletedAt == nil else { continue }
             guard !item.tags.contains(where: { $0.id == tagID }) else { continue }
-            snapshots.append((item, item.tags, item.updatedAt, item.lastEditorDeviceID))
+            snapshots.append((item, item.tags, item.updatedAt, item.tagMembershipUpdatedAt, item.lastEditorDeviceID))
             item.tags.append(tag)
             advanceVersion(of: item, now: now)
+            advanceTagMembership(of: item, now: now)
             changed.append(id)
         }
         guard !changed.isEmpty else { return [] }
         do {
             try save()
         } catch {
-            for (item, tags, updatedAt, deviceID) in snapshots {
+            for (item, tags, updatedAt, tagMembershipUpdatedAt, deviceID) in snapshots {
                 item.tags = tags
                 item.updatedAt = updatedAt
+                item.tagMembershipUpdatedAt = tagMembershipUpdatedAt
                 item.lastEditorDeviceID = deviceID
             }
             modelContext.rollback()
@@ -364,22 +373,24 @@ public final class ShoppingStore {
     @discardableResult
     public func removeTag(tagID: UUID, fromItemIDs: [UUID], now: Date = Date()) throws -> [UUID] {
         var changed: [UUID] = []
-        var snapshots: [(ShoppingItem, [Tag], Date, String)] = []
+        var snapshots: [(ShoppingItem, [Tag], Date, Date, String)] = []
         for id in fromItemIDs {
             guard let item = item(id: id), item.deletedAt == nil else { continue }
             guard item.tags.contains(where: { $0.id == tagID }) else { continue }
-            snapshots.append((item, item.tags, item.updatedAt, item.lastEditorDeviceID))
+            snapshots.append((item, item.tags, item.updatedAt, item.tagMembershipUpdatedAt, item.lastEditorDeviceID))
             item.tags.removeAll { $0.id == tagID }
             advanceVersion(of: item, now: now)
+            advanceTagMembership(of: item, now: now)
             changed.append(id)
         }
         guard !changed.isEmpty else { return [] }
         do {
             try save()
         } catch {
-            for (item, tags, updatedAt, deviceID) in snapshots {
+            for (item, tags, updatedAt, tagMembershipUpdatedAt, deviceID) in snapshots {
                 item.tags = tags
                 item.updatedAt = updatedAt
+                item.tagMembershipUpdatedAt = tagMembershipUpdatedAt
                 item.lastEditorDeviceID = deviceID
             }
             modelContext.rollback()
@@ -405,7 +416,9 @@ public final class ShoppingStore {
             // Retention is measured from completion time only — not createdAt or updatedAt.
             guard let completedAt = item.completedAt, completedAt < cutoff else { continue }
             item.deletedAt = now
-            advanceVersion(of: item, now: now)
+            // Version the tombstone from completion time, not wall-clock `now`, so a
+            // fresher remote completion still wins if prune raced ahead of sync.
+            advanceVersion(of: item, now: completedAt)
             result.softDeletedItemCount += 1
         }
 
@@ -559,21 +572,23 @@ public final class ShoppingStore {
         _ previous: [(itemID: UUID, tagIDs: [UUID])],
         now: Date = Date()
     ) throws {
-        var snapshots: [(ShoppingItem, [Tag], Date, String)] = []
+        var snapshots: [(ShoppingItem, [Tag], Date, Date, String)] = []
         for entry in previous {
             guard let item = item(id: entry.itemID), item.deletedAt == nil else { continue }
             let tags = try activeTags(ids: entry.tagIDs)
-            snapshots.append((item, item.tags, item.updatedAt, item.lastEditorDeviceID))
+            snapshots.append((item, item.tags, item.updatedAt, item.tagMembershipUpdatedAt, item.lastEditorDeviceID))
             item.tags = tags
             advanceVersion(of: item, now: now)
+            advanceTagMembership(of: item, now: now)
         }
         guard !snapshots.isEmpty else { return }
         do {
             try save()
         } catch {
-            for (item, tags, updatedAt, deviceID) in snapshots {
+            for (item, tags, updatedAt, tagMembershipUpdatedAt, deviceID) in snapshots {
                 item.tags = tags
                 item.updatedAt = updatedAt
+                item.tagMembershipUpdatedAt = tagMembershipUpdatedAt
                 item.lastEditorDeviceID = deviceID
             }
             modelContext.rollback()
@@ -598,7 +613,7 @@ public final class ShoppingStore {
             return item
         }
         let previousItemState = liveItems.map {
-            ($0, $0.tags, $0.updatedAt, $0.lastEditorDeviceID)
+            ($0, $0.tags, $0.updatedAt, $0.tagMembershipUpdatedAt, $0.lastEditorDeviceID)
         }
 
         tag.deletedAt = nil
@@ -606,14 +621,16 @@ public final class ShoppingStore {
         for item in liveItems where !item.tags.contains(where: { $0.id == id }) {
             item.tags.append(tag)
             advanceVersion(of: item, now: now)
+            advanceTagMembership(of: item, now: now)
         }
 
         do {
             try save()
         } catch {
-            for (item, tags, updatedAt, editorDeviceID) in previousItemState {
+            for (item, tags, updatedAt, tagMembershipUpdatedAt, editorDeviceID) in previousItemState {
                 item.tags = tags
                 item.updatedAt = updatedAt
+                item.tagMembershipUpdatedAt = tagMembershipUpdatedAt
                 item.lastEditorDeviceID = editorDeviceID
             }
             tag.deletedAt = previousDeletedAt
@@ -690,7 +707,9 @@ public final class ShoppingStore {
         let affectedItems = storedItems.filter { item in
             item.tags.contains { $0.id == id }
         }
-        let previousTags = affectedItems.map { ($0, $0.tags, $0.updatedAt, $0.lastEditorDeviceID) }
+        let previousTags = affectedItems.map {
+            ($0, $0.tags, $0.updatedAt, $0.tagMembershipUpdatedAt, $0.lastEditorDeviceID)
+        }
         let previousDeletedAt = tag.deletedAt
         let previousUpdatedAt = tag.updatedAt
         let previousDeviceID = tag.lastEditorDeviceID
@@ -698,6 +717,7 @@ public final class ShoppingStore {
         for item in affectedItems {
             item.tags.removeAll { $0.id == id }
             advanceVersion(of: item, now: now)
+            advanceTagMembership(of: item, now: now)
         }
         tag.deletedAt = now
         advanceVersion(of: tag, now: now)
@@ -705,9 +725,10 @@ public final class ShoppingStore {
         do {
             try save()
         } catch {
-            for (item, tags, updatedAt, editorDeviceID) in previousTags {
+            for (item, tags, updatedAt, tagMembershipUpdatedAt, editorDeviceID) in previousTags {
                 item.tags = tags
                 item.updatedAt = updatedAt
+                item.tagMembershipUpdatedAt = tagMembershipUpdatedAt
                 item.lastEditorDeviceID = editorDeviceID
             }
             tag.deletedAt = previousDeletedAt
@@ -761,6 +782,7 @@ public final class ShoppingStore {
                         deletedAt: item.deletedAt,
                         sortOrder: item.sortOrder,
                         tagIDs: item.tags.map(\.id).sorted { $0.uuidString < $1.uuidString },
+                        tagMembershipUpdatedAt: item.tagMembershipUpdatedAt,
                         lastEditorDeviceID: item.lastEditorDeviceID
                     )
                 }
@@ -837,6 +859,7 @@ public final class ShoppingStore {
                         ?? (itemSnapshot.isCompleted ? itemSnapshot.updatedAt : nil),
                     sortOrder: itemSnapshot.sortOrder,
                     updatedAt: itemSnapshot.updatedAt,
+                    tagMembershipUpdatedAt: itemSnapshot.tagMembershipUpdatedAt,
                     deletedAt: itemSnapshot.deletedAt,
                     lastEditorDeviceID: itemSnapshot.lastEditorDeviceID,
                     recordSchemaVersion: Self.currentRecordSchemaVersion
@@ -852,6 +875,7 @@ public final class ShoppingStore {
                 ?? (itemSnapshot.isCompleted ? itemSnapshot.updatedAt : nil)
             item.sortOrder = itemSnapshot.sortOrder
             item.updatedAt = itemSnapshot.updatedAt
+            item.tagMembershipUpdatedAt = itemSnapshot.tagMembershipUpdatedAt
             item.deletedAt = itemSnapshot.deletedAt
             item.lastEditorDeviceID = itemSnapshot.lastEditorDeviceID
             item.recordSchemaVersion = Self.currentRecordSchemaVersion
@@ -938,14 +962,25 @@ public final class ShoppingStore {
         }
 
         for item in legacyItems {
-            item.updatedAt = item.createdAt
+            if item.recordSchemaVersion < 2 {
+                item.updatedAt = item.createdAt
+                if item.lastEditorDeviceID.isEmpty {
+                    item.lastEditorDeviceID = deviceID
+                }
+            }
+            if item.tagMembershipUpdatedAt.timeIntervalSince1970 == 0
+                || item.recordSchemaVersion < 3 {
+                item.tagMembershipUpdatedAt = item.updatedAt
+            }
             if item.lastEditorDeviceID.isEmpty {
                 item.lastEditorDeviceID = deviceID
             }
             item.recordSchemaVersion = currentVersion
         }
         for tag in legacyTags {
-            tag.updatedAt = tag.createdAt
+            if tag.recordSchemaVersion < 2 {
+                tag.updatedAt = tag.createdAt
+            }
             if tag.lastEditorDeviceID.isEmpty {
                 tag.lastEditorDeviceID = deviceID
             }
@@ -963,6 +998,13 @@ public final class ShoppingStore {
     private func advanceVersion(of item: ShoppingItem, now: Date) {
         item.updatedAt = max(now, item.updatedAt.addingTimeInterval(0.000_001))
         item.lastEditorDeviceID = deviceID
+    }
+
+    private func advanceTagMembership(of item: ShoppingItem, now: Date) {
+        item.tagMembershipUpdatedAt = max(
+            now,
+            item.tagMembershipUpdatedAt.addingTimeInterval(0.000_001)
+        )
     }
 
     private func advanceVersion(of tag: Tag, now: Date) {

@@ -46,3 +46,6 @@ fastlane/test_output
 
 # Code Injection
 iOSInjectionProject/
+
+# Generated icon previews
+Resources/Brand/previews/

@@ -50,6 +50,8 @@ public struct ItemSnapshot: Codable, Equatable, Sendable {
     public let deletedAt: Date?
     public let sortOrder: Int
     public let tagIDs: [UUID]
+    /// Advances only when tag membership changes. Scalar edits (complete/rename) use `updatedAt`.
+    public let tagMembershipUpdatedAt: Date
     public let lastEditorDeviceID: String
 
     public init(
@@ -62,6 +64,7 @@ public struct ItemSnapshot: Codable, Equatable, Sendable {
         deletedAt: Date?,
         sortOrder: Int,
         tagIDs: [UUID],
+        tagMembershipUpdatedAt: Date? = nil,
         lastEditorDeviceID: String
     ) {
         self.id = id
@@ -73,6 +76,9 @@ public struct ItemSnapshot: Codable, Equatable, Sendable {
         self.deletedAt = deletedAt
         self.sortOrder = sortOrder
         self.tagIDs = tagIDs
+        // Prefer createdAt over updatedAt so legacy/missing membership does not inherit
+        // scalar edits (complete/rename) as if they changed tags.
+        self.tagMembershipUpdatedAt = tagMembershipUpdatedAt ?? createdAt
         self.lastEditorDeviceID = lastEditorDeviceID
     }
 
@@ -87,6 +93,7 @@ public struct ItemSnapshot: Codable, Equatable, Sendable {
         case sortOrder
         case tagIDs
         case tagIds
+        case tagMembershipUpdatedAt
         case lastEditorDeviceID
     }
 
@@ -98,12 +105,15 @@ public struct ItemSnapshot: Codable, Equatable, Sendable {
         self.isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
         self.createdAt = createdAt
         self.completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
-        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
+        let updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
+        self.updatedAt = updatedAt
         self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
         self.sortOrder = try container.decode(Int.self, forKey: .sortOrder)
         self.tagIDs = try container.decodeIfPresent([UUID].self, forKey: .tagIDs)
             ?? container.decodeIfPresent([UUID].self, forKey: .tagIds)
             ?? []
+        self.tagMembershipUpdatedAt = try container.decodeIfPresent(Date.self, forKey: .tagMembershipUpdatedAt)
+            ?? createdAt
         self.lastEditorDeviceID = try container.decodeIfPresent(String.self, forKey: .lastEditorDeviceID) ?? "legacy"
     }
 
@@ -118,6 +128,7 @@ public struct ItemSnapshot: Codable, Equatable, Sendable {
         try container.encodeIfPresent(deletedAt, forKey: .deletedAt)
         try container.encode(sortOrder, forKey: .sortOrder)
         try container.encode(tagIDs, forKey: .tagIDs)
+        try container.encode(tagMembershipUpdatedAt, forKey: .tagMembershipUpdatedAt)
         try container.encode(lastEditorDeviceID, forKey: .lastEditorDeviceID)
     }
 }
