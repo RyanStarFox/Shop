@@ -44,18 +44,23 @@ public final class ShoppingStore {
 
         let schema = Schema([ShoppingItem.self, Tag.self])
         let configuration: ModelConfiguration
+        let usedAppGroup: Bool
         if inMemory {
             configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+            usedAppGroup = false
         } else if let storeURL {
             configuration = ModelConfiguration(schema: schema, url: storeURL)
+            usedAppGroup = false
         } else {
-            // App Group entitlement → SwiftData `.automatic` uses the shared container.
-            // Migrate any pre-sandbox store out of unsandboxed Application Support first.
+            // Prefer App Group so the widget / Mac sandbox share one store.
+            // Sideloaded installs (AltStore resign) often lose a working App Group;
+            // forcing `groupContainer` then trips a SwiftData assertion and the app
+            // dies in `DataStore.init` before UI appears. Fall back to the app container.
             LegacySwiftDataStoreMigration.migrateIfNeeded()
-            configuration = ModelConfiguration(
+            usedAppGroup = WidgetSnapshotStore.isSharedContainerAvailable
+            configuration = Self.persistentConfiguration(
                 schema: schema,
-                isStoredInMemoryOnly: false,
-                groupContainer: .identifier(LegacySwiftDataStoreMigration.appGroupID)
+                preferAppGroup: usedAppGroup
             )
         }
         do {
@@ -64,7 +69,22 @@ public final class ShoppingStore {
                 configurations: [configuration]
             )
         } catch {
-            throw ShoppingStoreError.containerCreationFailed(error.localizedDescription)
+            // Group container may look available but still fail to open (entitlement
+            // mismatch after resign). Retry once in the private app container.
+            if usedAppGroup {
+                do {
+                    modelContainer = try ModelContainer(
+                        for: schema,
+                        configurations: [
+                            Self.persistentConfiguration(schema: schema, preferAppGroup: false)
+                        ]
+                    )
+                } catch {
+                    throw ShoppingStoreError.containerCreationFailed(error.localizedDescription)
+                }
+            } else {
+                throw ShoppingStoreError.containerCreationFailed(error.localizedDescription)
+            }
         }
         modelContext = modelContainer.mainContext
 
@@ -76,6 +96,24 @@ public final class ShoppingStore {
         }
 
         try backfillLegacyVersions()
+    }
+
+    private static func persistentConfiguration(
+        schema: Schema,
+        preferAppGroup: Bool
+    ) -> ModelConfiguration {
+        if preferAppGroup {
+            return ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                groupContainer: .identifier(LegacySwiftDataStoreMigration.appGroupID)
+            )
+        }
+        return ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            groupContainer: .none
+        )
     }
 
     public var items: [ShoppingItem] {

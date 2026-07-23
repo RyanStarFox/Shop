@@ -94,6 +94,11 @@ struct MacContentView: View {
         .onChange(of: filteredItems.map(\.id)) { _, _ in
             pruneSelection()
         }
+        .onChange(of: isDetailEditing) { _, editing in
+            if editing {
+                isListKeyboardFocused = false
+            }
+        }
         .onExitCommand(perform: handleDetailEscape)
         .alert(ShopStrings.deleteItem, isPresented: Binding(
             get: { tagDeleteTarget != nil },
@@ -1619,11 +1624,9 @@ private struct MacItemDetailView: View {
     var body: some View {
         Group {
             if let item {
-                if isEditing {
-                    editingForm(for: item)
-                } else {
-                    previewForm(for: item)
-                }
+                // Always show the editor for a selected item (design: select → edit).
+                // `isEditing` only gates keyboard focus / list-nav handoff, not visibility.
+                editingForm(for: item)
             } else {
                 ContentUnavailableView(
                     ShopStrings.editItem,
@@ -1663,54 +1666,16 @@ private struct MacItemDetailView: View {
             MacKeyboardFocusHelper.resignKeyFocus()
         }
         .onChange(of: editorField) { _, newValue in
-            if let newValue, isEditing {
+            if let newValue {
+                // Clicking into the detail editor promotes list → detail keyboard mode.
+                if !isEditing {
+                    isEditing = true
+                }
                 lastEditorFocus = newValue
                 isTextFocused = true
-            } else if newValue == nil {
+            } else {
                 isTextFocused = false
             }
-        }
-    }
-
-    @ViewBuilder
-    private func previewForm(for item: ShoppingItem) -> some View {
-        Form {
-            Section {
-                Text(itemName.isEmpty ? item.name : itemName)
-                    .font(.body)
-            }
-
-            Section(ShopStrings.tags) {
-                if selectedTags.isEmpty {
-                    Text(ShopStrings.noTags)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(dataStore.tags.filter { selectedTags.contains($0.id) }) { tag in
-                        HStack(spacing: ShopTheme.spacingSM) {
-                            Circle()
-                                .fill(tag.displayColor)
-                                .frame(width: 10, height: 10)
-                            Text(tag.name)
-                        }
-                    }
-                }
-            }
-
-            Section {
-                LabeledContent(ShopStrings.addedAt) {
-                    Text(createdAt.formatted(date: .abbreviated, time: .shortened))
-                }
-                if item.isCompleted {
-                    LabeledContent(ShopStrings.completedAtLabel) {
-                        Text(completedAt.formatted(date: .abbreviated, time: .shortened))
-                    }
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .onAppear { syncFromItem(item) }
-        .onChange(of: item.updatedAt) { _, _ in
-            syncFromItemIfNeeded(item)
         }
     }
 
