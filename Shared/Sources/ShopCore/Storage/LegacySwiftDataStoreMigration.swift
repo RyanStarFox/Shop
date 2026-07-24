@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 #if os(macOS)
 import Darwin
 #endif
@@ -39,7 +40,7 @@ public enum LegacySwiftDataStoreMigration {
             .appendingPathComponent("Library/Application Support", isDirectory: true)
         let destinationStore = destinationDirectory.appendingPathComponent(storeFileName)
 
-        if isUsableStore(at: destinationStore, fileManager: fileManager) {
+        if hasShoppingData(at: destinationStore, fileManager: fileManager) {
             // New container already has data — never touch the legacy `group.*` ID again.
             return false
         }
@@ -80,12 +81,13 @@ public enum LegacySwiftDataStoreMigration {
         fileManager: FileManager = .default
     ) -> Bool {
         let destinationStore = destinationDirectory.appendingPathComponent(storeFileName)
-        if isUsableStore(at: destinationStore, fileManager: fileManager) {
+        if hasShoppingData(at: destinationStore, fileManager: fileManager) {
             return false
         }
 
         guard let sourceStore = sourceStoreURLs.first(where: {
-            isUsableStore(at: $0, fileManager: fileManager)
+            hasShoppingData(at: $0, fileManager: fileManager)
+                || isUsableStore(at: $0, fileManager: fileManager)
         }) else {
             return false
         }
@@ -123,6 +125,44 @@ public enum LegacySwiftDataStoreMigration {
         fileManager
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
             .appendingPathComponent("Library/Application Support", isDirectory: true)
+    }
+
+    /// Private (non–App Group) SwiftData location used when `groupContainer: .none`.
+    public static func privateApplicationSupportDirectory(
+        fileManager: FileManager = .default
+    ) -> URL? {
+        fileManager
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first
+    }
+
+    public static func privateStoreURL(fileManager: FileManager = .default) -> URL? {
+        privateApplicationSupportDirectory(fileManager: fileManager)?
+            .appendingPathComponent(storeFileName)
+    }
+
+    public static func appGroupStoreURL(fileManager: FileManager = .default) -> URL? {
+        destinationApplicationSupportDirectory(fileManager: fileManager)?
+            .appendingPathComponent(storeFileName)
+    }
+
+    /// Copies a usable private store into an empty/missing App Group store.
+    @discardableResult
+    public static func migratePrivateStoreToAppGroupIfNeeded(
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard let destinationDirectory = destinationApplicationSupportDirectory(
+            fileManager: fileManager
+        ),
+            let privateStore = privateStoreURL(fileManager: fileManager)
+        else {
+            return false
+        }
+        return migrateIfNeeded(
+            sourceStoreURLs: [privateStore],
+            destinationDirectory: destinationDirectory,
+            fileManager: fileManager
+        )
     }
 
     /// Legacy store candidates for tests / direct callers.
@@ -189,7 +229,8 @@ public enum LegacySwiftDataStoreMigration {
     }
     #endif
 
-    private static func isUsableStore(at url: URL, fileManager: FileManager) -> Bool {
+    /// Whether `url` exists and has non-zero size (shared with store-location planning).
+    public static func isUsableStore(at url: URL, fileManager: FileManager = .default) -> Bool {
         guard fileManager.fileExists(atPath: url.path) else { return false }
         guard let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
               let size = values.fileSize
@@ -197,5 +238,53 @@ public enum LegacySwiftDataStoreMigration {
             return false
         }
         return size > 0
+    }
+
+    /// True when the store has at least one `ShoppingItem` or `Tag` row.
+    ///
+    /// An empty SwiftData schema file is still ~70KB, so `isUsableStore` alone
+    /// treats blank App Group shells as real data and blocks private→group healing.
+    /// Unreadable non-empty files are treated as having data so we never clobber them.
+    public static func hasShoppingData(at url: URL, fileManager: FileManager = .default) -> Bool {
+        guard isUsableStore(at: url, fileManager: fileManager) else { return false }
+        // Only probe real SQLite files — opening arbitrary bytes can create/replace
+        // `-shm` sidecars and break migration tests / adjacent files.
+        guard isSQLiteHeader(at: url) else { return true }
+
+        var db: OpaquePointer?
+        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX
+        guard sqlite3_open_v2(url.path, &db, flags, nil) == SQLITE_OK, let db else {
+            return true
+        }
+        defer { sqlite3_close(db) }
+
+        func count(table: String) -> Int? {
+            var statement: OpaquePointer?
+            let sql = "SELECT COUNT(*) FROM \(table);"
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                return nil
+            }
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        let items = count(table: "ZSHOPPINGITEM")
+        let tags = count(table: "ZTAG")
+        if items == nil, tags == nil {
+            // Not our schema — assume real content.
+            return true
+        }
+        return (items ?? 0) + (tags ?? 0) > 0
+    }
+
+    private static func isSQLiteHeader(at url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        let prefix = Data("SQLite format 3\0".utf8)
+        guard let data = try? handle.read(upToCount: prefix.count), data.count == prefix.count else {
+            return false
+        }
+        return data == prefix
     }
 }

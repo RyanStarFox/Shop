@@ -15,7 +15,10 @@ public final class ShoppingItem: Identifiable, Hashable {
     public var deletedAt: Date? = nil
     public var lastEditorDeviceID: String = ""
     public var recordSchemaVersion: Int = 0
-    @Relationship(deleteRule: .nullify) public var tags: [Tag]
+    /// Many-to-many with `Tag.items`. An inverse is required — without it SwiftData
+    /// stores a to-one FK on `Tag` and shared tags are stolen across items on save.
+    @Relationship(deleteRule: .nullify, inverse: \Tag.items)
+    public var tags: [Tag]
 
     public init(
         id: UUID = UUID(),

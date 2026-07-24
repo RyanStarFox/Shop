@@ -242,7 +242,11 @@ final class ShoppingStoreTests: XCTestCase {
             XCTAssertEqual(store.item(id: currentItemID)?.updatedAt, epoch)
             XCTAssertEqual(store.item(id: currentItemID)?.lastEditorDeviceID, "original")
             XCTAssertEqual(store.item(id: currentItemID)?.recordSchemaVersion, 3)
-            XCTAssertEqual(store.item(id: currentItemID)?.tagMembershipUpdatedAt, epoch)
+            // Legacy schema < 3 backfills membership from createdAt (not updatedAt).
+            XCTAssertEqual(
+                store.item(id: currentItemID)?.tagMembershipUpdatedAt,
+                Date(timeIntervalSince1970: 100)
+            )
             XCTAssertEqual(store.tag(id: currentTagID)?.updatedAt, epoch)
             XCTAssertEqual(store.tag(id: currentTagID)?.lastEditorDeviceID, "original")
             XCTAssertEqual(store.tag(id: currentTagID)?.recordSchemaVersion, 3)
@@ -270,6 +274,175 @@ final class ShoppingStoreTests: XCTestCase {
         XCTAssertEqual(reopened.tag(id: currentTagID)?.updatedAt, epoch)
         XCTAssertEqual(reopened.tag(id: currentTagID)?.lastEditorDeviceID, "original")
         XCTAssertEqual(reopened.tag(id: currentTagID)?.recordSchemaVersion, 3)
+    }
+
+    func testDiskReopenPreservesItemTagMembershipAndTimestamp() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("shop.store")
+        let taggedAt = Date(timeIntervalSince1970: 5_000)
+
+        let itemID: UUID
+        let tagID: UUID
+        do {
+            let store = try ShoppingStore(deviceID: "iphone", storeURL: storeURL)
+            let tag = try store.addTag(name: "Food", colorHex: "#2F7D63", now: taggedAt)
+            let item = try store.addItem(name: "Milk", tagIDs: [], now: taggedAt.addingTimeInterval(-10))
+            try store.updateItem(itemID: item.id, tagIDs: [tag.id], now: taggedAt)
+            itemID = item.id
+            tagID = tag.id
+            XCTAssertEqual(store.item(id: itemID)?.tags.map(\.id), [tagID])
+            XCTAssertEqual(store.item(id: itemID)?.tagMembershipUpdatedAt, taggedAt)
+        }
+
+        let reopened = try ShoppingStore(deviceID: "iphone", storeURL: storeURL)
+        XCTAssertEqual(reopened.item(id: itemID)?.tags.map(\.id), [tagID])
+        XCTAssertEqual(reopened.item(id: itemID)?.tagMembershipUpdatedAt, taggedAt)
+        XCTAssertEqual(reopened.tag(id: tagID)?.name, "Food")
+
+        let snapshot = try reopened.makeSnapshot(now: taggedAt.addingTimeInterval(1))
+        XCTAssertEqual(snapshot.items.first { $0.id == itemID }?.tagIDs, [tagID])
+        XCTAssertEqual(
+            snapshot.items.first { $0.id == itemID }?.tagMembershipUpdatedAt,
+            taggedAt
+        )
+    }
+
+    /// Shared tags must be many-to-many. Without an inverse, SwiftData stores a to-one FK on
+    /// `Tag` (`Z1TAGS`) so assigning the same tag to a second item steals it from the first —
+    /// and launch sync `applyCanonical` reassigns tags item-by-item, dropping them on quit/reopen.
+    func testSharedTagRemainsOnBothItemsAfterSaveAndDiskReopen() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("shop.store")
+
+        let milkID: UUID
+        let breadID: UUID
+        let tagID: UUID
+        do {
+            let store = try ShoppingStore(deviceID: "iphone", storeURL: storeURL)
+            let tag = try store.addTag(name: "Food", colorHex: "#2F7D63")
+            let milk = try store.addItem(name: "Milk", tagIDs: [tag.id])
+            let bread = try store.addItem(name: "Bread", tagIDs: [tag.id])
+            milkID = milk.id
+            breadID = bread.id
+            tagID = tag.id
+            XCTAssertEqual(Set(store.item(id: milkID)?.tags.map(\.id) ?? []), [tagID])
+            XCTAssertEqual(Set(store.item(id: breadID)?.tags.map(\.id) ?? []), [tagID])
+        }
+
+        let reopened = try ShoppingStore(deviceID: "iphone", storeURL: storeURL)
+        XCTAssertEqual(Set(reopened.item(id: milkID)?.tags.map(\.id) ?? []), [tagID])
+        XCTAssertEqual(Set(reopened.item(id: breadID)?.tags.map(\.id) ?? []), [tagID])
+    }
+
+    func testApplyCanonicalKeepsSharedTagOnEveryItem() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("shop.store")
+
+        let milkID: UUID
+        let breadID: UUID
+        let tagID: UUID
+        do {
+            let store = try ShoppingStore(deviceID: "mac", storeURL: storeURL)
+            let tag = try store.addTag(name: "Food", colorHex: "#2F7D63")
+            let milk = try store.addItem(name: "Milk", tagIDs: [tag.id])
+            let bread = try store.addItem(name: "Bread", tagIDs: [tag.id])
+            milkID = milk.id
+            breadID = bread.id
+            tagID = tag.id
+
+            let snapshot = try store.makeSnapshot()
+            // Launch sync path: merge result applied canonically, rewriting every item's tags.
+            try store.applyCanonicalSnapshot(snapshot)
+        }
+
+        let reopened = try ShoppingStore(deviceID: "mac", storeURL: storeURL)
+        XCTAssertEqual(Set(reopened.item(id: milkID)?.tags.map(\.id) ?? []), [tagID])
+        XCTAssertEqual(Set(reopened.item(id: breadID)?.tags.map(\.id) ?? []), [tagID])
+    }
+
+    func testRelaunchThenSyncKeepsLocalTagsWhenRemoteIsStaleUntagged() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("shop.store")
+        let createdAt = Date(timeIntervalSince1970: 1_000)
+        let taggedAt = Date(timeIntervalSince1970: 2_000)
+        let completedAt = Date(timeIntervalSince1970: 3_000)
+
+        let itemID: UUID
+        let tagID: UUID
+        do {
+            let store = try ShoppingStore(deviceID: "iphone", storeURL: storeURL)
+            let tag = try store.addTag(name: "Food", colorHex: "#2F7D63", now: createdAt)
+            let item = try store.addItem(name: "Milk", tagIDs: [], createdAt: createdAt, now: createdAt)
+            try store.updateItem(itemID: item.id, tagIDs: [tag.id], now: taggedAt)
+            // Scalar edit after tagging (same as completing before quit).
+            try store.setCompleted(itemID: item.id, completed: true, now: completedAt)
+            itemID = item.id
+            tagID = tag.id
+        }
+
+        // Cold start: reopen store, then merge a stale remote that never saw the tag.
+        let store = try ShoppingStore(deviceID: "iphone", storeURL: storeURL)
+        XCTAssertEqual(store.item(id: itemID)?.tags.map(\.id), [tagID])
+
+        let staleRemote = SyncSnapshot(
+            generatedAt: completedAt,
+            items: [
+                ItemSnapshot(
+                    id: itemID,
+                    name: "Milk",
+                    isCompleted: false,
+                    createdAt: createdAt,
+                    completedAt: nil,
+                    updatedAt: createdAt,
+                    deletedAt: nil,
+                    sortOrder: 0,
+                    tagIDs: [],
+                    // Legacy remote: missing membership → decode/init uses createdAt.
+                    tagMembershipUpdatedAt: createdAt,
+                    lastEditorDeviceID: "mac"
+                )
+            ],
+            tags: [
+                TagSnapshot(
+                    id: tagID,
+                    name: "Food",
+                    colorHex: "#2F7D63",
+                    createdAt: createdAt,
+                    updatedAt: createdAt,
+                    deletedAt: nil,
+                    lastEditorDeviceID: "iphone"
+                )
+            ]
+        )
+        try store.apply(snapshot: staleRemote)
+
+        XCTAssertEqual(store.item(id: itemID)?.isCompleted, true)
+        XCTAssertEqual(store.item(id: itemID)?.tags.map(\.id), [tagID])
+        XCTAssertEqual(store.item(id: itemID)?.tagMembershipUpdatedAt, taggedAt)
     }
 
     func testShoppingStoreErrorsUseLocalizedFormattingEntryPoints() {

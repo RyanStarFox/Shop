@@ -11,6 +11,9 @@ public final class Tag: Identifiable, Hashable {
     public var deletedAt: Date? = nil
     public var lastEditorDeviceID: String = ""
     public var recordSchemaVersion: Int = 0
+    /// Inverse of `ShoppingItem.tags` — enables true many-to-many membership.
+    @Relationship(deleteRule: .nullify)
+    public var items: [ShoppingItem] = []
 
     public init(
         id: UUID = UUID(),
@@ -30,6 +33,7 @@ public final class Tag: Identifiable, Hashable {
         self.deletedAt = deletedAt
         self.lastEditorDeviceID = lastEditorDeviceID
         self.recordSchemaVersion = recordSchemaVersion
+        self.items = []
     }
 
     public var color: PlatformColor {

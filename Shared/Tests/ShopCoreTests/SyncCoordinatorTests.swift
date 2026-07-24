@@ -322,8 +322,9 @@ final class SyncCoordinatorTests: XCTestCase {
 
         let snap1 = try store.makeSnapshot()
         try store.applyCanonicalSnapshot(snap1)
-        XCTAssertEqual(store.items.map(\.id).sorted { $0.uuidString < $1.uuidString },
-                       [untagged.id, tagged.id].sorted { $0.uuidString < $1.uuidString })
+        let expectedIDs = [untagged.id, tagged.id].sorted { $0.uuidString < $1.uuidString }
+        let actualIDs = store.items.map(\.id).sorted { $0.uuidString < $1.uuidString }
+        XCTAssertEqual(actualIDs, expectedIDs)
 
         // Remote-looking snapshot that still includes the untagged item with empty tagIDs.
         let remote = SyncSnapshot(

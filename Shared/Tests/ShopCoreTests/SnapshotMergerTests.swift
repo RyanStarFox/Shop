@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import ShopCore
 
 @MainActor
@@ -316,6 +317,68 @@ final class SnapshotMergerTests: XCTestCase {
         XCTAssertEqual(store.item(id: itemID)?.isCompleted, true)
         XCTAssertEqual(store.item(id: itemID)?.tags.map(\.id), [tagID])
         XCTAssertEqual(store.item(id: itemID)?.tagMembershipUpdatedAt, t1)
+    }
+
+    func testLegacyBackfillMembershipDoesNotLetUntaggedCompletionBeatTaggedPeer() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("shop.store")
+        let itemID = UUID()
+        let tagID = UUID()
+        let createdAt = Date(timeIntervalSince1970: 1_000)
+        let taggedAt = Date(timeIntervalSince1970: 2_000)
+        let completedAt = Date(timeIntervalSince1970: 3_000)
+
+        // Seed a pre–schema-3 untagged item whose scalar updatedAt is newer than the
+        // phone's tag membership (the old backfill-from-updatedAt bug path).
+        let schema = Schema([ShoppingItem.self, Tag.self])
+        let configuration = ModelConfiguration(schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        context.insert(
+            Tag(
+                id: tagID,
+                name: "Food",
+                createdAt: createdAt,
+                updatedAt: createdAt,
+                lastEditorDeviceID: "mac",
+                recordSchemaVersion: 2
+            )
+        )
+        context.insert(
+            ShoppingItem(
+                id: itemID,
+                name: "Milk",
+                isCompleted: true,
+                createdAt: createdAt,
+                completedAt: completedAt,
+                updatedAt: completedAt,
+                tagMembershipUpdatedAt: Date(timeIntervalSince1970: 0),
+                lastEditorDeviceID: "mac",
+                recordSchemaVersion: 2
+            )
+        )
+        try context.save()
+
+        let store = try ShoppingStore(deviceID: "mac", storeURL: storeURL)
+        XCTAssertEqual(store.item(id: itemID)?.tagMembershipUpdatedAt, createdAt)
+
+        try store.apply(snapshot: snapshot(
+            items: [item(
+                id: itemID,
+                name: "Milk",
+                updatedAt: taggedAt,
+                tagIDs: [tagID],
+                tagMembershipUpdatedAt: taggedAt,
+                deviceID: "iphone"
+            )],
+            tags: [tag(id: tagID, name: "Food", updatedAt: taggedAt)]
+        ))
+
+        XCTAssertEqual(store.item(id: itemID)?.tags.map(\.id), [tagID])
+        XCTAssertEqual(store.item(id: itemID)?.tagMembershipUpdatedAt, taggedAt)
     }
 
     private func snapshot(

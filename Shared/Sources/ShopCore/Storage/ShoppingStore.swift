@@ -44,23 +44,28 @@ public final class ShoppingStore {
 
         let schema = Schema([ShoppingItem.self, Tag.self])
         let configuration: ModelConfiguration
-        let usedAppGroup: Bool
+        let plannedAppGroup: Bool
         if inMemory {
             configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-            usedAppGroup = false
+            plannedAppGroup = false
         } else if let storeURL {
             configuration = ModelConfiguration(schema: schema, url: storeURL)
-            usedAppGroup = false
+            plannedAppGroup = false
         } else {
             // Prefer App Group so the widget / Mac sandbox share one store.
             // Sideloaded installs (AltStore resign) often lose a working App Group;
             // forcing `groupContainer` then trips a SwiftData assertion and the app
-            // dies in `DataStore.init` before UI appears. Fall back to the app container.
+            // dies in `DataStore.init` before UI appears. Fall back to the app container,
+            // and stick to that choice so a later empty App Group open cannot orphan tags.
             LegacySwiftDataStoreMigration.migrateIfNeeded()
-            usedAppGroup = WidgetSnapshotStore.isSharedContainerAvailable
+            let plan = Self.resolvePersistentStorePlan()
+            if plan.migratePrivateToAppGroup {
+                _ = LegacySwiftDataStoreMigration.migratePrivateStoreToAppGroupIfNeeded()
+            }
+            plannedAppGroup = plan.location == .appGroup
             configuration = Self.persistentConfiguration(
                 schema: schema,
-                preferAppGroup: usedAppGroup
+                preferAppGroup: plannedAppGroup
             )
         }
         do {
@@ -68,10 +73,15 @@ public final class ShoppingStore {
                 for: schema,
                 configurations: [configuration]
             )
+            if !inMemory, storeURL == nil {
+                PersistentStoreLocator.saveSticky(
+                    plannedAppGroup ? .appGroup : .applicationSupport
+                )
+            }
         } catch {
             // Group container may look available but still fail to open (entitlement
-            // mismatch after resign). Retry once in the private app container.
-            if usedAppGroup {
+            // mismatch after resign). Retry once in the private app container and stick.
+            if plannedAppGroup {
                 do {
                     modelContainer = try ModelContainer(
                         for: schema,
@@ -79,6 +89,7 @@ public final class ShoppingStore {
                             Self.persistentConfiguration(schema: schema, preferAppGroup: false)
                         ]
                     )
+                    PersistentStoreLocator.saveSticky(.applicationSupport)
                 } catch {
                     throw ShoppingStoreError.containerCreationFailed(error.localizedDescription)
                 }
@@ -113,6 +124,42 @@ public final class ShoppingStore {
             schema: schema,
             isStoredInMemoryOnly: false,
             groupContainer: .none
+        )
+    }
+
+    /// Testable store-location decision for the default (non-`storeURL`) path.
+    static func resolvePersistentStorePlan(
+        groupAvailable: Bool = WidgetSnapshotStore.isSharedContainerAvailable,
+        sticky: PersistentStoreLocation? = PersistentStoreLocator.loadSticky(),
+        fileManager: FileManager = .default
+    ) -> PersistentStorePlan {
+        let appGroupUsable: Bool = {
+            guard let url = LegacySwiftDataStoreMigration.appGroupStoreURL(
+                fileManager: fileManager
+            ) else {
+                return false
+            }
+            return LegacySwiftDataStoreMigration.hasShoppingData(
+                at: url,
+                fileManager: fileManager
+            )
+        }()
+        let privateUsable: Bool = {
+            guard let url = LegacySwiftDataStoreMigration.privateStoreURL(
+                fileManager: fileManager
+            ) else {
+                return false
+            }
+            return LegacySwiftDataStoreMigration.hasShoppingData(
+                at: url,
+                fileManager: fileManager
+            )
+        }()
+        return PersistentStoreLocator.plan(
+            groupAvailable: groupAvailable,
+            sticky: sticky,
+            appGroupStoreUsable: appGroupUsable,
+            privateStoreUsable: privateUsable
         )
     }
 
@@ -1008,7 +1055,9 @@ public final class ShoppingStore {
             }
             if item.tagMembershipUpdatedAt.timeIntervalSince1970 == 0
                 || item.recordSchemaVersion < 3 {
-                item.tagMembershipUpdatedAt = item.updatedAt
+                // Use createdAt — not updatedAt — so a legacy untagged copy that later
+                // completed/renamed cannot beat a tagged peer on membership LWW after upgrade.
+                item.tagMembershipUpdatedAt = item.createdAt
             }
             if item.lastEditorDeviceID.isEmpty {
                 item.lastEditorDeviceID = deviceID

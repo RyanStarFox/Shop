@@ -1826,9 +1826,9 @@ private struct MacItemDetailView: View {
     }
 
     private func deferSave(_ item: ShoppingItem) {
-        DispatchQueue.main.async {
-            save(item)
-        }
+        // Save synchronously — async deferral can be dropped on quit before the
+        // main-queue block runs, leaving tag toggles only in @State.
+        save(item)
     }
 
     private func save(_ item: ShoppingItem) {
