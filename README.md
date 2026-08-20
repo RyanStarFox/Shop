@@ -33,7 +33,7 @@ Release page: [https://github.com/RyanStarFox/Shop/releases](https://github.com/
 
 #### macOS: “App is damaged” / cannot open
 
-GitHub downloads are often quarantined by macOS. Development-signed builds are also **not notarized**, so Gatekeeper may block them.
+GitHub downloads are often quarantined by macOS. The Mac build is **ad-hoc signed** (no Developer ID / notarization), so Gatekeeper may block it on first launch.
 
 After installing from the DMG, run one of:
 
@@ -120,7 +120,7 @@ MIT
 
 #### Mac：提示「已损坏」或无法打开
 
-从 GitHub 下载的文件常被系统加上隔离属性（quarantine）；当前 DMG 多为 **开发证书签名且未公证**，容易被拦截。
+从 GitHub 下载的文件常被系统加上隔离属性（quarantine）；当前 DMG 为 **ad-hoc 签名且未公证**（无需证书、任何 Mac 可运行，但首次打开可能被拦截）。
 
 安装后可在终端执行：
 

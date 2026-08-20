@@ -18,8 +18,8 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: "H6AYG25QVN"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.0.1"
+    CURRENT_PROJECT_VERSION: "2"
     INFOPLIST_KEY_CFBundleDisplayName: "Shop !"
     GENERATE_INFOPLIST_FILE: YES
 
@@ -115,6 +115,13 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_LANGUAGE: en
         CODE_SIGN_ENTITLEMENTS: macOS/ShopMac/ShopMac.entitlements
+        # Ad-hoc signing: free open-source distribution, runs on any Mac
+        # (no Apple Development certificate / provisioning profile dependency).
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        # Clear the inherited DEVELOPMENT_TEAM so Xcode treats this as
+        # "Sign to Run Locally" instead of requiring a provisioning profile.
+        DEVELOPMENT_TEAM: ""
       configs:
         Debug:
           ENABLE_USER_SCRIPT_SANDBOXING: false
@@ -176,6 +183,12 @@ targets:
         INFOPLIST_FILE: Widgets/macOS/Info.plist
         DEVELOPMENT_LANGUAGE: en
         CODE_SIGN_ENTITLEMENTS: Widgets/ShopMacWidget.entitlements
+        # Ad-hoc signing to match the host app (free open-source distribution).
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        # Clear the inherited DEVELOPMENT_TEAM so Xcode treats this as
+        # "Sign to Run Locally" instead of requiring a provisioning profile.
+        DEVELOPMENT_TEAM: ""
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
         # Debug dylib / previews break appex codesign ("__preview.dylib is not signed").
         ENABLE_DEBUG_DYLIB: NO
