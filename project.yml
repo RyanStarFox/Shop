@@ -18,8 +18,8 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: "H6AYG25QVN"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.0.1"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "1.0.2"
+    CURRENT_PROJECT_VERSION: "3"
     INFOPLIST_KEY_CFBundleDisplayName: "Shop !"
     GENERATE_INFOPLIST_FILE: YES
 
@@ -129,18 +129,18 @@ targets:
           ENABLE_USER_SCRIPT_SANDBOXING: false
     dependencies:
       - package: ShopCore
-      - target: ShopMacWidget
-        embed: true
+      # macOS Widget intentionally DISCONNECTED (code kept, target still defined):
+      # ad-hoc signing has no TeamIdentifier, so the App Group shared store makes
+      # macOS Sequoia+ TCC prompt “access other apps’ data” on every launch.
+      # Without a widget there is no shared container to prompt about.
     entitlements:
       path: macOS/ShopMac/ShopMac.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
-        # Team ID prefix avoids Sequoia “access other apps’ data” on every launch.
-        # Legacy unprefixed group kept only for one-time migration.
-        com.apple.security.application-groups:
-          - H6AYG25QVN.group.com.ryanstarfox.shop
-          - group.com.ryanstarfox.shop
+        # No application-groups on macOS: with ad-hoc signing there is no trusted
+        # Team ID to vouch for the group, so the container read is treated as
+        # cross-app data access and TCC asks every launch.
 
   ShopWidget:
     type: app-extension
@@ -237,8 +237,8 @@ schemes:
   ShopMac:
     build:
       targets:
+        # ShopMacWidget intentionally not built (macOS widget disconnected).
         ShopMac: all
-        ShopMacWidget: all
     run:
       config: Debug
     profile:
