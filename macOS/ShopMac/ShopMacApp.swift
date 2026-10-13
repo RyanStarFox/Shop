@@ -15,6 +15,7 @@ struct ShopMacApp: App {
     @AppStorage("webdav_username") private var webdavUsername = ""
     @AppStorage("webdav_path") private var webdavPath = ""
     @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
+    @AppStorage(ThemeAccent.storageKey) private var themeHex = ThemeAccent.defaultHex
     @AppStorage("has_seen_onboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
     @State private var backgroundActivity: NSBackgroundActivityScheduler?
@@ -39,10 +40,13 @@ struct ShopMacApp: App {
                 .environmentObject(undoCoordinator)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
-                .tint(ShopTheme.brandColor)
-                .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
+                .tint(ThemeAccent.color(hex: themeHex))
+                .environment(\.shopAccent, ThemeAccent.color(hex: themeHex))
+                .macPreferredAppearance(appearanceMode)
+                .id(appearanceMode)
                 .frame(minWidth: 720, idealWidth: 960, minHeight: 520, idealHeight: 700)
                 .onAppear {
+                    applyMacAppearance()
                     webdavSync.migrateLegacyPasswordIfNeeded(
                         serverURL: webdavServer,
                         username: webdavUsername,
@@ -71,6 +75,9 @@ struct ShopMacApp: App {
                         }
                         dataStore.pruneExpiredData()
                     }
+                }
+                .onChange(of: appearanceMode) { _, _ in
+                    applyMacAppearance()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
@@ -110,7 +117,10 @@ struct ShopMacApp: App {
                 .environmentObject(undoCoordinator)
                 .environmentObject(webdavSync)
                 .environmentObject(syncCoordinator)
-                .preferredColorScheme(AppearancePreference(storageValue: appearanceMode).colorScheme)
+                .tint(ThemeAccent.color(hex: themeHex))
+                .environment(\.shopAccent, ThemeAccent.color(hex: themeHex))
+                .macPreferredAppearance(appearanceMode)
+                .id(appearanceMode)
         }
     }
 
@@ -139,9 +149,43 @@ struct ShopMacApp: App {
         }
         backgroundActivity = activity
     }
+
+    /// SwiftUI `preferredColorScheme(nil)` does not undo a previous light/dark
+    /// override, so the content can stay light while the window chrome follows
+    /// the system. Apply the choice to AppKit, and only set a SwiftUI scheme
+    /// for an explicit light or dark preference.
+    private func applyMacAppearance() {
+        let preference = AppearancePreference(storageValue: appearanceMode)
+        let appearance: NSAppearance? = switch preference {
+        case .system:
+            nil
+        case .light:
+            NSAppearance(named: .aqua)
+        case .dark:
+            NSAppearance(named: .darkAqua)
+        }
+        NSApp.appearance = appearance
+        for window in NSApp.windows {
+            window.appearance = appearance
+        }
+    }
 }
 
 extension Notification.Name {
     static let shopShowOnboarding = Notification.Name("shopShowOnboarding")
     static let shopAddFromWidget = Notification.Name("shopAddFromWidget")
+}
+
+private extension View {
+    @ViewBuilder
+    func macPreferredAppearance(_ storageValue: String) -> some View {
+        switch AppearancePreference(storageValue: storageValue) {
+        case .system:
+            self
+        case .light:
+            self.preferredColorScheme(.light)
+        case .dark:
+            self.preferredColorScheme(.dark)
+        }
+    }
 }

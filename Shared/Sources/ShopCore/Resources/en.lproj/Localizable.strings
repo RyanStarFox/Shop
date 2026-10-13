@@ -24,8 +24,19 @@
 "common.cancel" = "Cancel";
 "appearance.system" = "System";
 "appearance.light" = "Light";
+"theme.color" = "Theme Color";
+"theme.custom" = "Custom Color";
+"theme.reset" = "Reset to Default Red";
+"theme.preset.brand" = "Default Red";
+"theme.preset.red" = "Red";
+"theme.preset.orange" = "Orange";
+"theme.preset.yellow" = "Yellow";
+"theme.preset.green" = "Green";
+"theme.preset.blue" = "Blue";
+"theme.preset.purple" = "Purple";
+"theme.preset.pink" = "Pink";
 "app.tagline" = "A shopping list for iPhone, Mac, and Apple Watch";
-"app.version" = "Shop ! v1.0.0";
+"app.version" = "Shop! v1.0.0";
 "about.github" = "GitHub: RyanStarFox/Shop";
 "onboarding.view_tutorial" = "View tutorial";
 "onboarding.get_started" = "Get started";
@@ -97,7 +108,7 @@
 "watch.error.file_cleanup_failed" = "Unable to remove a Watch sync temporary file: %@";
 
 /* App / items used by extensions */
-"app.name" = "Shop !";
+"app.name" = "Shop!";
 "item.empty" = "No items yet. Tap + to add one!";
 "item.pending_count" = "%d to buy";
 "widget.empty" = "No items to buy";

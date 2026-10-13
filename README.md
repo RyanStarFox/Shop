@@ -1,14 +1,14 @@
-# Shop !
+# Shop!
 
 Bilingual shopping list for **iPhone**, **Apple Watch**, and **Mac**  
 中英双语购物清单，支持 **iPhone**、**Apple Watch**、**Mac**
 
 - English ↓
-- [中文说明](#shop--中文)
+- [中文说明](#shop-中文)
 
 ---
 
-## Shop ! (English)
+## Shop! (English)
 
 A calm, local-first shopping list built with SwiftUI. iPhone, Watch, and Mac share one `ShopCore` package, with optional WebDAV sync and WatchConnectivity.
 
@@ -27,7 +27,7 @@ Release page: [https://github.com/RyanStarFox/Shop/releases](https://github.com/
 
 | Asset | Platform | Notes |
 |-------|----------|--------|
-| `Shop-*-macOS.dmg` | Mac | Drag `Shop !.app` to Applications |
+| `Shop-*-macOS.dmg` | Mac | Drag `Shop!.app` to Applications |
 | `Shop-*-iOS-withWatch.ipa` | iPhone (+ Watch) | Includes the Watch companion |
 | `Shop-*-iOS-noWatch.ipa` | iPhone only | Smaller install; no Watch app |
 
@@ -39,10 +39,10 @@ After installing from the DMG, run one of:
 
 ```bash
 # Recommended: clear quarantine on the installed app
-xattr -cr "/Applications/Shop !.app"
+xattr -cr "/Applications/Shop!.app"
 
 # Or, if needed:
-sudo xattr -rd com.apple.quarantine "/Applications/Shop !.app"
+sudo xattr -rd com.apple.quarantine "/Applications/Shop!.app"
 ```
 
 If the app is still blocked: **System Settings → Privacy & Security → Open Anyway**.
@@ -61,7 +61,7 @@ You can:
 Notes:
 
 - Release IPAs are typically **development / debugging** exports. They require a valid signing identity and device registration for your team.
-- Prefer **withWatch** if you use Apple Watch with Shop !.
+- Prefer **withWatch** if you use Apple Watch with Shop!.
 - Prefer **noWatch** if you only need the iPhone app.
 
 ### Build from source
@@ -95,7 +95,7 @@ MIT
 
 ---
 
-## Shop ! (中文)
+## Shop! (中文)
 
 本地优先的购物清单，SwiftUI 原生支持 iPhone / Apple Watch / Mac，可选 WebDAV 与手表同步。
 
@@ -114,7 +114,7 @@ MIT
 
 | 文件 | 平台 | 说明 |
 |------|------|------|
-| `Shop-*-macOS.dmg` | Mac | 将 `Shop !.app` 拖入「应用程序」 |
+| `Shop-*-macOS.dmg` | Mac | 将 `Shop!.app` 拖入「应用程序」 |
 | `Shop-*-iOS-withWatch.ipa` | iPhone（含 Watch） | 带手表 companion |
 | `Shop-*-iOS-noWatch.ipa` | 仅 iPhone | 不含手表应用 |
 
@@ -126,10 +126,10 @@ MIT
 
 ```bash
 # 推荐：清除应用程序上的隔离属性
-xattr -cr "/Applications/Shop !.app"
+xattr -cr "/Applications/Shop!.app"
 
 # 如有需要也可：
-sudo xattr -rd com.apple.quarantine "/Applications/Shop !.app"
+sudo xattr -rd com.apple.quarantine "/Applications/Shop!.app"
 ```
 
 若仍无法打开：打开 **系统设置 → 隐私与安全性 → 仍要打开**。

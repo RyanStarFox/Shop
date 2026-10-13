@@ -3,6 +3,7 @@ import AppKit
 import ShopCore
 
 struct MacContentView: View {
+    @Environment(\.shopAccent) private var shopAccent
     @EnvironmentObject private var dataStore: DataStore
     @EnvironmentObject private var undoCoordinator: UndoCoordinator
     @EnvironmentObject private var webdavSync: WebDAVSyncService
@@ -59,7 +60,7 @@ struct MacContentView: View {
                 .navigationSplitViewColumnWidth(min: 260, ideal: 300)
         }
         .navigationSplitViewStyle(.balanced)
-        .tint(ShopTheme.brandColor)
+        .tint(shopAccent)
         .background(VisualEffectView(material: .windowBackground, blendingMode: .behindWindow))
         .sensoryFeedback(.impact(weight: .heavy, intensity: 1.0), trigger: completionHapticToken)
         .sensoryFeedback(.impact(weight: .medium, intensity: 1.0), trigger: restoreHapticToken)
@@ -169,9 +170,15 @@ struct MacContentView: View {
             List {
                 Section {
                     Button(action: beginDraft) {
-                        Label(ShopStrings.addItem, systemImage: "plus.circle")
-                            .foregroundStyle(ShopTheme.brandColor)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: ShopTheme.spacingSM) {
+                            Image(systemName: "plus.circle")
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(shopAccent)
+                            Text(ShopStrings.addItem)
+                                .foregroundStyle(shopAccent)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .help(ShopStrings.addItem)
@@ -185,12 +192,16 @@ struct MacContentView: View {
                             focusItemList()
                         } label: {
                             HStack(spacing: ShopTheme.spacingSM) {
-                                Label(filterLabel(for: option), systemImage: iconForFilter(option))
+                                Image(systemName: iconForFilter(option))
+                                    .symbolRenderingMode(.monochrome)
+                                    .foregroundStyle(shopAccent)
+                                    .frame(width: 18)
+                                Text(filterLabel(for: option))
                                     .foregroundStyle(.primary)
                                 Spacer(minLength: 0)
                                 if dataStore.selectedFilter == option {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(ShopTheme.brandColor)
+                                        .foregroundStyle(shopAccent)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,6 +250,7 @@ struct MacContentView: View {
                 .id("sidebar-tags-\(dataStore.selectedTags.count)-\(dataStore.tagMatchMode.rawValue)")
             }
             .listStyle(.sidebar)
+            .tint(shopAccent)
 
             syncStatusBar
                 .padding(ShopTheme.spacingSM + 4)
@@ -285,10 +297,6 @@ struct MacContentView: View {
             }
         }
         .navigationTitle(listTitle)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            focusItemList()
-        }
         .focusable()
         .focused($isListKeyboardFocused)
         .focusEffectDisabled()
@@ -490,12 +498,42 @@ struct MacContentView: View {
 
     // MARK: - Sync Status
 
+    /// Gray: not configured or not synced yet. Orange: in progress. Green: last sync succeeded. Red: failed.
+    private var syncStatusDotColor: Color {
+        guard webdavSync.isConfigured else { return .secondary }
+        if syncCoordinator.status.isSyncing {
+            return .orange
+        }
+        if syncCoordinator.status.failureMessage != nil || webdavSync.error != nil {
+            return .red
+        }
+        if syncCoordinator.status.lastSuccess != nil {
+            return .green
+        }
+        return .secondary
+    }
+
+    private var syncStatusDotHelp: String {
+        guard webdavSync.isConfigured else { return ShopStrings.webdavNotConfigured }
+        if syncCoordinator.status.isSyncing {
+            return ShopStrings.syncing
+        }
+        if let error = syncCoordinator.status.failureMessage ?? webdavSync.error {
+            return error
+        }
+        if let lastSync = syncCoordinator.status.lastSuccess {
+            return "\(ShopStrings.lastSync): \(lastSync.formatted(.relative(presentation: .named)))"
+        }
+        return ShopStrings.webdavConfigured
+    }
+
     private var syncStatusBar: some View {
         VStack(alignment: .leading, spacing: ShopTheme.spacingXS) {
             HStack(spacing: ShopTheme.spacingXS + 2) {
                 Circle()
-                    .fill(webdavSync.isConfigured ? ShopTheme.brandColor : Color.secondary)
+                    .fill(syncStatusDotColor)
                     .frame(width: 8, height: 8)
+                    .help(syncStatusDotHelp)
 
                 Text(
                     webdavSync.isConfigured
@@ -824,7 +862,7 @@ struct MacContentView: View {
                 Spacer(minLength: 0)
                 if dataStore.selectedTags.isEmpty {
                     Image(systemName: "checkmark")
-                        .foregroundStyle(ShopTheme.brandColor)
+                        .foregroundStyle(shopAccent)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
@@ -849,7 +887,7 @@ struct MacContentView: View {
                 Spacer(minLength: 0)
                 if dataStore.selectedTags.contains(tag.id) {
                     Image(systemName: "checkmark")
-                        .foregroundStyle(ShopTheme.brandColor)
+                        .foregroundStyle(shopAccent)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
@@ -868,7 +906,7 @@ struct MacContentView: View {
                     .frame(width: 10, height: 10)
                 Text(String(localized: "mac.tag_new"))
             }
-            .foregroundStyle(ShopTheme.brandColor)
+            .foregroundStyle(shopAccent)
             .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -908,8 +946,8 @@ struct MacContentView: View {
                 .font(.body)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.vertical, 4)
-                .background(selected ? ShopTheme.brandColor.opacity(0.2) : Color.clear)
-                .foregroundStyle(selected ? ShopTheme.brandColor : .primary)
+                .background(selected ? shopAccent.opacity(0.2) : Color.clear)
+                .foregroundStyle(selected ? shopAccent : .primary)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1103,6 +1141,7 @@ private struct MacDraftRow: View {
 }
 
 private struct MacItemListView: View {
+    @Environment(\.shopAccent) private var shopAccent
     let filteredItems: [ShoppingItem]
     let searchIsActive: Bool
     let selectedItemIDs: Set<UUID>
@@ -1153,7 +1192,7 @@ private struct MacItemListView: View {
                     MacDraftRow()
                         .contentShape(Rectangle())
                         .onTapGesture(perform: onSelectDraft)
-                        .listRowBackground(ShopTheme.brandColor.opacity(0.12))
+                        .listRowBackground(shopAccent.opacity(0.12))
                 }
             }
 
@@ -1255,7 +1294,7 @@ private struct MacItemListView: View {
                     systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark"
                 )
             }
-            .tint(ShopTheme.brandColor)
+            .tint(shopAccent)
         }
         .contextMenu {
             Button(role: .destructive) {
@@ -1274,6 +1313,7 @@ private struct MacItemListView: View {
 // MARK: - Item Row
 
 private struct MacItemRow: View {
+    @Environment(\.shopAccent) private var shopAccent
     let item: ShoppingItem
     let isSelected: Bool
     let onToggleCompletion: () -> Void
@@ -1286,8 +1326,10 @@ private struct MacItemRow: View {
         HStack(spacing: ShopTheme.spacingSM + 4) {
             Button(action: onToggleCompletion) {
                 MacCompletionControl(isCompleted: item.isCompleted)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .help(item.isCompleted ? ShopStrings.markIncomplete : ShopStrings.markComplete)
 
             HStack(alignment: .top) {
@@ -1323,27 +1365,28 @@ private struct MacItemRow: View {
         .focusEffectDisabled()
         .listRowBackground(
             isSelected
-                ? ShopTheme.brandColor.opacity(0.12)
+                ? shopAccent.opacity(0.12)
                 : Color.clear
         )
     }
 }
 
 private struct MacCompletionControl: View {
+    @Environment(\.shopAccent) private var shopAccent
     let isCompleted: Bool
 
     var body: some View {
         ZStack {
             Circle()
                 .stroke(
-                    isCompleted ? ShopTheme.brandColor : Color.secondary.opacity(0.35),
+                    isCompleted ? shopAccent : Color.secondary.opacity(0.35),
                     lineWidth: 2
                 )
                 .frame(width: 20, height: 20)
 
             if isCompleted {
                 Circle()
-                    .fill(ShopTheme.brandColor)
+                    .fill(shopAccent)
                     .frame(width: 20, height: 20)
                 Image(systemName: "checkmark")
                     .font(.system(size: 9, weight: .bold))
@@ -1377,6 +1420,7 @@ private struct MacTagRow: View {
 // MARK: - Draft Detail
 
 private struct MacBatchDetailView: View {
+    @Environment(\.shopAccent) private var shopAccent
     let selectedItemIDs: Set<UUID>
     let onComplete: () -> Void
     let onRestore: () -> Void
@@ -1428,7 +1472,7 @@ private struct MacBatchDetailView: View {
                             Text(tag.name)
                             Spacer()
                             Image(systemName: symbol(for: membership))
-                                .foregroundStyle(ShopTheme.brandColor)
+                                .foregroundStyle(shopAccent)
                         }
                         .contentShape(Rectangle())
                     }
@@ -1949,17 +1993,21 @@ struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
 
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
+        view.appearance = NSAppearance(named: colorScheme == .dark ? .darkAqua : .aqua)
         return view
     }
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
+        nsView.appearance = NSAppearance(named: colorScheme == .dark ? .darkAqua : .aqua)
     }
 }
 #endif

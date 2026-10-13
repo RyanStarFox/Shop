@@ -132,4 +132,21 @@ final class LegacySwiftDataStoreMigrationTests: XCTestCase {
         XCTAssertTrue(didMigrate)
         XCTAssertEqual(try Data(contentsOf: blankURL), Data("private-with-tags".utf8))
     }
+
+    func testMigratesStoreFromPreviousProductNameFolder() throws {
+        let support = temporaryRoot.appendingPathComponent("Application Support", isDirectory: true)
+        let named = support.appendingPathComponent("Shop !", isDirectory: true)
+        try FileManager.default.createDirectory(at: named, withIntermediateDirectories: true)
+        try Data("from-spaced-name".utf8).write(to: named.appendingPathComponent("default.store"))
+
+        let didMigrate = LegacySwiftDataStoreMigration.migrateProductNamedStoreIfNeeded(
+            applicationSupportDirectory: support
+        )
+
+        XCTAssertTrue(didMigrate)
+        XCTAssertEqual(
+            try Data(contentsOf: support.appendingPathComponent("default.store")),
+            Data("from-spaced-name".utf8)
+        )
+    }
 }

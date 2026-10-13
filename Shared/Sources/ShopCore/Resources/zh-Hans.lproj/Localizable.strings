@@ -24,8 +24,19 @@
 "common.cancel" = "取消";
 "appearance.system" = "跟随系统";
 "appearance.light" = "浅色";
+"theme.color" = "主题色";
+"theme.custom" = "自定义颜色";
+"theme.reset" = "恢复默认红色";
+"theme.preset.brand" = "默认红";
+"theme.preset.red" = "红色";
+"theme.preset.orange" = "橙色";
+"theme.preset.yellow" = "黄色";
+"theme.preset.green" = "绿色";
+"theme.preset.blue" = "蓝色";
+"theme.preset.purple" = "紫色";
+"theme.preset.pink" = "粉色";
 "app.tagline" = "适用于 iPhone、Mac 与 Apple Watch 的购物清单";
-"app.version" = "Shop ! v1.0.0";
+"app.version" = "Shop! v1.0.0";
 "about.github" = "GitHub：RyanStarFox/Shop";
 "onboarding.view_tutorial" = "查看教程";
 "onboarding.get_started" = "开始使用";
@@ -97,7 +108,7 @@
 "watch.error.file_cleanup_failed" = "无法删除 Apple Watch 同步临时文件：%@";
 
 /* App / items used by extensions */
-"app.name" = "Shop !";
+"app.name" = "Shop!";
 "item.empty" = "还没有物品，点击 + 添加吧！";
 "item.pending_count" = "待买 %d 项";
 "widget.empty" = "暂无待买物品";

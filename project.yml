@@ -18,9 +18,9 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: "H6AYG25QVN"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.0.2"
-    CURRENT_PROJECT_VERSION: "3"
-    INFOPLIST_KEY_CFBundleDisplayName: "Shop !"
+    MARKETING_VERSION: "1.0.3"
+    CURRENT_PROJECT_VERSION: "4"
+    INFOPLIST_KEY_CFBundleDisplayName: "Shop!"
     GENERATE_INFOPLIST_FILE: YES
 
 configs:
@@ -98,18 +98,18 @@ targets:
       - package: ShopCore
 
   # macOS App
-  # productName / PRODUCT_NAME → Finder bundle is "Shop !.app" (scheme/target stay ShopMac)
+  # productName / PRODUCT_NAME → Finder bundle is "Shop!.app" (scheme/target stay ShopMac)
   ShopMac:
     type: application
     platform: macOS
-    productName: "Shop !"
+    productName: "Shop!"
     sources:
       - path: macOS/ShopMac
         type: group
       - path: Resources/AppIcon.icon
     settings:
       base:
-        PRODUCT_NAME: "Shop !"
+        PRODUCT_NAME: "Shop!"
         PRODUCT_BUNDLE_IDENTIFIER: com.ryanstarfox.shop.mac
         INFOPLIST_FILE: macOS/ShopMac/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

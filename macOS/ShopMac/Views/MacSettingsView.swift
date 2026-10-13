@@ -1,7 +1,9 @@
 import SwiftUI
+import AppKit
 import ShopCore
 
 struct MacSettingsView: View {
+    @Environment(\.shopAccent) private var shopAccent
     @EnvironmentObject private var dataStore: DataStore
     @EnvironmentObject private var undoCoordinator: UndoCoordinator
     @EnvironmentObject private var webdavSync: WebDAVSyncService
@@ -11,66 +13,42 @@ struct MacSettingsView: View {
     @AppStorage("webdav_username") private var webdavUsername = ""
     @AppStorage("webdav_path") private var webdavPath = ""
     @AppStorage("appearance_mode") private var appearanceMode = AppearancePreference.system.rawValue
+    @AppStorage(ThemeAccent.storageKey) private var themeHex = ThemeAccent.defaultHex
     @State private var webdavPassword = ""
     @State private var webdavSyncTask: Task<Void, Never>?
+    @State private var pane = SettingsPane.appearance
+    @Namespace private var tabGlass
 
     var body: some View {
-        TabView {
-            Form {
-                Picker(ShopStrings.appearance, selection: $appearanceMode) {
-                    Text(ShopStrings.appearanceSystem).tag(AppearancePreference.system.rawValue)
-                    Text(ShopStrings.appearanceLight).tag(AppearancePreference.light.rawValue)
-                    Text(ShopStrings.darkMode).tag(AppearancePreference.dark.rawValue)
-                }
-                .pickerStyle(.radioGroup)
-
-                Picker(ShopStrings.dataRetention, selection: $dataStore.dataRetention) {
-                    ForEach(DataRetentionPolicy.allCases, id: \.self) { policy in
-                        Text(policy.localizedTitle).tag(policy)
-                    }
-                }
-
-                Text(ShopStrings.dataRetentionFooter)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Button {
-                    NotificationCenter.default.post(name: .shopShowOnboarding, object: nil)
-                } label: {
-                    Label(ShopStrings.viewTutorial, systemImage: "book")
-                }
+        Group {
+            switch pane {
+            case .appearance:
+                appearanceForm
+            case .sync:
+                WebDAVSettingsTab(
+                    server: $webdavServer,
+                    folderPath: $webdavPath,
+                    username: $webdavUsername,
+                    password: $webdavPassword,
+                    isConfigured: webdavSync.isConfigured,
+                    isSyncing: syncCoordinator.status.isSyncing,
+                    lastSync: syncCoordinator.status.lastSuccess,
+                    error: webdavSync.error ?? syncCoordinator.status.failureMessage,
+                    resolvedFileURL: webdavSync.resolvedFileURL,
+                    onSync: saveCredentialsAndSync
+                )
+            case .tags:
+                MacTagSettingsTab()
+                    .environmentObject(dataStore)
+                    .environmentObject(undoCoordinator)
             }
-            .formStyle(.grouped)
-            .padding()
-            .tabItem {
-                Label(ShopStrings.appearance, systemImage: "paintpalette")
-            }
-
-            WebDAVSettingsTab(
-                server: $webdavServer,
-                folderPath: $webdavPath,
-                username: $webdavUsername,
-                password: $webdavPassword,
-                isConfigured: webdavSync.isConfigured,
-                isSyncing: syncCoordinator.status.isSyncing,
-                lastSync: syncCoordinator.status.lastSuccess,
-                error: webdavSync.error ?? syncCoordinator.status.failureMessage,
-                resolvedFileURL: webdavSync.resolvedFileURL,
-                onSync: saveCredentialsAndSync
-            )
-            .tabItem {
-                Label(ShopStrings.sync, systemImage: "arrow.triangle.2.circlepath")
-            }
-
-            MacTagSettingsTab()
-                .environmentObject(dataStore)
-                .environmentObject(undoCoordinator)
-                .tabItem {
-                    Label(ShopStrings.tags, systemImage: "tag")
-                }
         }
-        .frame(width: 480, height: 460)
-        .tint(ShopTheme.brandColor)
+        .frame(width: 480, height: 520)
+        .toolbar {
+            settingsToolbar
+        }
+        .background(SettingsWindowTitle(title: pane.title))
+        .tint(shopAccent)
         .onAppear {
             webdavSync.migrateLegacyPasswordIfNeeded(
                 serverURL: webdavServer,
@@ -89,6 +67,159 @@ struct MacSettingsView: View {
         }
     }
 
+    private var appearanceForm: some View {
+        Form {
+            Picker(ShopStrings.appearance, selection: $appearanceMode) {
+                Text(ShopStrings.appearanceSystem).tag(AppearancePreference.system.rawValue)
+                Text(ShopStrings.appearanceLight).tag(AppearancePreference.light.rawValue)
+                Text(ShopStrings.darkMode).tag(AppearancePreference.dark.rawValue)
+            }
+            .pickerStyle(.radioGroup)
+
+            themeColorSection
+
+            Picker(ShopStrings.dataRetention, selection: $dataStore.dataRetention) {
+                ForEach(DataRetentionPolicy.allCases, id: \.self) { policy in
+                    Text(policy.localizedTitle).tag(policy)
+                }
+            }
+
+            Text(ShopStrings.dataRetentionFooter)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Button {
+                NotificationCenter.default.post(name: .shopShowOnboarding, object: nil)
+            } label: {
+                Label(ShopStrings.viewTutorial, systemImage: "book")
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    @ToolbarContentBuilder
+    private var settingsToolbar: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItemGroup(placement: .principal) {
+                settingsTabs
+            }
+            .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItemGroup(placement: .principal) {
+                settingsTabs
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var settingsTabs: some View {
+        if #available(macOS 26.0, *) {
+            glassSettingsTabs
+        } else {
+            HStack(spacing: 4) {
+                ForEach(SettingsPane.allCases) { item in
+                    legacySettingsTab(item)
+                }
+            }
+        }
+    }
+
+    @available(macOS 26.0, *)
+    private var glassSettingsTabs: some View {
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(SettingsPane.allCases) { item in
+                    glassSettingsTab(item)
+                }
+            }
+        }
+        .animation(.smooth(duration: 0.32), value: pane)
+    }
+
+    @available(macOS 26.0, *)
+    private func glassSettingsTab(_ item: SettingsPane) -> some View {
+        let selected = pane == item
+        return settingsTabLabel(item, selected: selected)
+            .glassEffect(
+                selected ? .regular.interactive() : .identity,
+                in: RoundedRectangle(cornerRadius: SettingsPane.cornerRadius, style: .continuous)
+            )
+            .glassEffectID(selected ? "settings-tab-selection" : item.id, in: tabGlass)
+            .glassEffectTransition(.matchedGeometry)
+    }
+
+    private func legacySettingsTab(_ item: SettingsPane) -> some View {
+        settingsTabLabel(item, selected: pane == item)
+    }
+
+    private func settingsTabLabel(_ item: SettingsPane, selected: Bool) -> some View {
+        Button {
+            pane = item
+        } label: {
+            VStack(spacing: 1) {
+                Image(systemName: item.symbol)
+                    .symbolRenderingMode(.monochrome)
+                    .font(.system(size: 16, weight: .medium))
+                Text(item.title)
+                    .font(.system(size: 10))
+            }
+            .foregroundStyle(selected ? shopAccent : Color.secondary)
+            .frame(width: SettingsPane.side, height: SettingsPane.side)
+            .contentShape(RoundedRectangle(cornerRadius: SettingsPane.cornerRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var customThemeColor: Binding<Color> {
+        Binding(
+            get: { ThemeAccent.color(hex: themeHex) },
+            set: { newColor in
+                guard let hex = newColor.shopHexString else { return }
+                if ThemeAccent.isSystemBlue(themeHex),
+                   let systemHex = Color.blue.shopHexString,
+                   ThemeAccent.matches(hex, systemHex) {
+                    return
+                }
+                themeHex = hex
+            }
+        )
+    }
+
+    private var themeColorSection: some View {
+        VStack(alignment: .leading, spacing: ShopTheme.spacingSM) {
+            Text(ShopStrings.themeColor)
+            HStack(spacing: ShopTheme.spacingSM) {
+                ForEach(ThemeAccent.presets) { preset in
+                    let selected = ThemeAccent.matches(themeHex, preset.hex)
+                    Button {
+                        themeHex = preset.hex
+                    } label: {
+                        Circle()
+                            .fill(ThemeAccent.color(hex: preset.hex))
+                            .frame(width: 22, height: 22)
+                            .padding(3)
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(selected ? Color.primary : Color.clear, lineWidth: 2)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .help(ShopStrings.themePresetName(preset.id))
+                    .accessibilityLabel(ShopStrings.themePresetName(preset.id))
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+            ColorPicker(ShopStrings.themeCustom, selection: customThemeColor, supportsOpacity: false)
+            Button(ShopStrings.themeReset) {
+                themeHex = ThemeAccent.defaultHex
+            }
+            .disabled(ThemeAccent.matches(themeHex, ThemeAccent.defaultHex))
+        }
+    }
+
     private func saveCredentialsAndSync() {
         webdavSyncTask = Task {
             do {
@@ -103,6 +234,48 @@ struct MacSettingsView: View {
             } catch {
                 // The service exposes the localized error without revealing credentials.
             }
+        }
+    }
+}
+
+private enum SettingsPane: String, CaseIterable, Identifiable {
+    /// Selected glass plate matches the system tab: a rounded square, not a wide bar.
+    static let side: CGFloat = 46
+    static let cornerRadius: CGFloat = 12
+
+    case appearance
+    case sync
+    case tags
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .appearance: ShopStrings.appearance
+        case .sync: ShopStrings.sync
+        case .tags: ShopStrings.tags
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .appearance: "paintpalette"
+        case .sync: "arrow.triangle.2.circlepath"
+        case .tags: "tag"
+        }
+    }
+}
+
+private struct SettingsWindowTitle: NSViewRepresentable {
+    var title: String
+
+    func makeNSView(context: Context) -> NSView {
+        NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            nsView.window?.title = title
         }
     }
 }
@@ -264,6 +437,7 @@ private struct MacTagSettingsTab: View {
 // MARK: - Tag Edit Row
 
 private struct MacTagEditRow: View {
+    @Environment(\.shopAccent) private var shopAccent
     let tag: Tag
     let onDelete: () -> Void
     let onRename: (String) -> Void
@@ -314,7 +488,7 @@ private struct MacTagEditRow: View {
                     }
                 } label: {
                     Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil.circle")
-                        .foregroundStyle(isEditing ? ShopTheme.brandColor : .secondary)
+                        .foregroundStyle(isEditing ? shopAccent : .secondary)
                 }
                 .buttonStyle(.plain)
                 .help(isEditing ? ShopStrings.saveItem : ShopStrings.editItem)

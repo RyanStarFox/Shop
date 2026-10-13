@@ -58,6 +58,13 @@ public final class ShoppingStore {
             // dies in `DataStore.init` before UI appears. Fall back to the app container,
             // and stick to that choice so a later empty App Group open cannot orphan tags.
             LegacySwiftDataStoreMigration.migrateIfNeeded()
+            if let applicationSupport = LegacySwiftDataStoreMigration
+                .privateApplicationSupportDirectory()
+            {
+                LegacySwiftDataStoreMigration.migrateProductNamedStoreIfNeeded(
+                    applicationSupportDirectory: applicationSupport
+                )
+            }
             let plan = Self.resolvePersistentStorePlan()
             if plan.migratePrivateToAppGroup {
                 _ = LegacySwiftDataStoreMigration.migratePrivateStoreToAppGroupIfNeeded()
@@ -118,6 +125,15 @@ public final class ShoppingStore {
                 schema: schema,
                 isStoredInMemoryOnly: false,
                 groupContainer: .identifier(LegacySwiftDataStoreMigration.appGroupID)
+            )
+        }
+        // Explicit file, not a folder named after the product. Renaming the app
+        // (Shop ! ↔ Shop!) must not open a different database.
+        if let storeURL = LegacySwiftDataStoreMigration.privateStoreURL() {
+            return ModelConfiguration(
+                schema: schema,
+                url: storeURL,
+                cloudKitDatabase: .none
             )
         }
         return ModelConfiguration(

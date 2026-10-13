@@ -146,6 +146,30 @@ public enum LegacySwiftDataStoreMigration {
             .appendingPathComponent(storeFileName)
     }
 
+    /// Folders SwiftData used when the product name was part of the store path.
+    /// `Shop !` is the previous Mac bundle name; the live store is `default.store`
+    /// directly in Application Support, not inside one of these folders.
+    public static let productNameStoreFolderNames = ["Shop !", "Shop!", "ShopMac", "Shop"]
+
+    /// If the canonical `default.store` has no shopping data, copy the first
+    /// name-based store (`Shop !`, `Shop!`, …) into it.
+    @discardableResult
+    public static func migrateProductNamedStoreIfNeeded(
+        applicationSupportDirectory: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        let sources = productNameStoreFolderNames.map {
+            applicationSupportDirectory
+                .appendingPathComponent($0, isDirectory: true)
+                .appendingPathComponent(storeFileName)
+        }
+        return migrateIfNeeded(
+            sourceStoreURLs: sources,
+            destinationDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        )
+    }
+
     /// Copies a usable private store into an empty/missing App Group store.
     @discardableResult
     public static func migratePrivateStoreToAppGroupIfNeeded(

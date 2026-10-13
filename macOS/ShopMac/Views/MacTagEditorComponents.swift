@@ -87,6 +87,7 @@ enum MacEditorFocus: Hashable {
 }
 
 private struct MacEditorFocusRing: ViewModifier {
+    @Environment(\.shopAccent) private var shopAccent
     let isFocused: Bool
 
     func body(content: Content) -> some View {
@@ -95,11 +96,11 @@ private struct MacEditorFocusRing: ViewModifier {
             .padding(.vertical, 7)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isFocused ? ShopTheme.brandColor.opacity(0.1) : Color.clear)
+                    .fill(isFocused ? shopAccent.opacity(0.1) : Color.clear)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(isFocused ? ShopTheme.brandColor : Color.clear, lineWidth: 2)
+                    .strokeBorder(isFocused ? shopAccent : Color.clear, lineWidth: 2)
             }
     }
 }
@@ -113,6 +114,7 @@ private extension View {
 // MARK: - Selectable Tag Row
 
 struct MacTagSelectableRow: View {
+    @Environment(\.shopAccent) private var shopAccent
     let tag: Tag
     let isSelected: Bool
     let isFocused: Bool
@@ -129,7 +131,7 @@ struct MacTagSelectableRow: View {
             Spacer(minLength: 0)
             if isSelected {
                 Image(systemName: "checkmark")
-                    .foregroundStyle(ShopTheme.brandColor)
+                    .foregroundStyle(shopAccent)
             }
         }
         .padding(.horizontal, 8)
@@ -137,11 +139,11 @@ struct MacTagSelectableRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isFocused ? ShopTheme.brandColor.opacity(0.1) : Color.clear)
+                .fill(isFocused ? shopAccent.opacity(0.1) : Color.clear)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(isFocused ? ShopTheme.brandColor : Color.clear, lineWidth: 2)
+                .strokeBorder(isFocused ? shopAccent : Color.clear, lineWidth: 2)
         }
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onTapGesture {
@@ -885,6 +887,7 @@ enum MacDateLayout {
 
 /// Each date/time segment is a peer focus target in the editor field cycle.
 struct MacFocusableDatePicker: View {
+    @Environment(\.shopAccent) private var shopAccent
     @Binding var selection: Date
     var focusedSegment: MacDateSegment?
     var onFocusSegment: (MacDateSegment) -> Void
@@ -914,7 +917,7 @@ struct MacFocusableDatePicker: View {
                         .padding(.vertical, 2)
                         .background {
                             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(focused ? ShopTheme.brandColor.opacity(0.22) : Color.clear)
+                                .fill(focused ? shopAccent.opacity(0.22) : Color.clear)
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {

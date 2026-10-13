@@ -289,6 +289,18 @@ public enum ShopStrings {
     public static var appearance: String {
         NSLocalizedString("settings.appearance", comment: "Appearance")
     }
+    public static var themeColor: String {
+        NSLocalizedString("theme.color", bundle: .module, comment: "Theme color")
+    }
+    public static var themeCustom: String {
+        NSLocalizedString("theme.custom", bundle: .module, comment: "Custom theme color")
+    }
+    public static var themeReset: String {
+        NSLocalizedString("theme.reset", bundle: .module, comment: "Reset theme color to default red")
+    }
+    public static func themePresetName(_ id: String) -> String {
+        NSLocalizedString("theme.preset.\(id)", bundle: .module, comment: "Theme color preset name")
+    }
     public static var appearanceSystem: String {
         NSLocalizedString("appearance.system", bundle: .module, comment: "System appearance")
     }
